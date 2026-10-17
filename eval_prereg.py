@@ -79,6 +79,40 @@ def analyze(psnr_all, bg_dream, bg_real, window=fw.STUCK_WINDOW, max_bg=fw.FLAT_
     }
 
 
+def flat_escape(world, denoise, K, n=64, horizon=24, seed=21, steps=2, ctx_sigma=0.05, init="unit"):
+    """Exploratory diagnostic (docs/PREREG-v3.md, M4; not part of any decision): the mechanism behind the collapse in isolation. Start
+    facing a wall closely (a flat-wall frame, no floor or ceiling), K identical frames of context, then hold 'turn right' for `horizon`
+    frames (5 degrees each). The real game turns away from the wall and shows what is around the corner; a dream that cannot tell where
+    it is has nothing to go on, a dream that can localise from the wall's colour does. Reports PSNR against the real game at a few
+    frames (and the freeze baseline) and how often the dream is still on a flat wall at the end, next to the real game."""
+    from data.policy import ExplorationPolicy
+    rng = np.random.default_rng(seed)
+    pool = ExplorationPolicy(world, 8 * n, rng, respawn_prob=0.0).random_states(8 * n)
+    flat = fw.flat_flags(fw.background_fraction(world.render(pool), world.bg_rows))
+    keep = np.nonzero(flat)[0][:n]
+    st = rc.State(*[v[keep] for v in pool])
+    m = len(keep)
+    frames = [world.render(st)] * K
+    acts = [np.zeros((m, 3), np.int64)] * (K - 1)
+    for _ in range(horizon):
+        a = np.tile(np.array((0, 0, 2), np.int64), (m, 1))
+        acts.append(a)
+        st = world.step(st, a)
+        frames.append(world.render(st))
+    traj = {"frames": ev._to_unit(np.stack(frames, 1)), "actions": torch.from_numpy(np.stack(acts, 1))}
+    r = ev.rollout_metrics(denoise, traj, horizon=horizon, steps=steps, order=1, ctx_sigma=ctx_sigma, init=init, batch=m, return_frames=True, K=K)
+    fz, _ = E.frozen_baseline(traj, horizon, K=K)
+    dream_flat = fw.flat_flags(fw.background_fraction(E.to_u8(r["frames"]), world.bg_rows))
+    real_flat = fw.flat_flags(fw.background_fraction(E.to_u8(traj["frames"][:, K:K + horizon]), world.bg_rows))
+    at = [t for t in (4, 8, 16, 24) if t <= horizon]
+    return {"definition": f"start on a flat-wall frame, {K} identical context frames, hold turn-right for {horizon} frames; exploratory, not pre-registered as decisive",
+            "episodes": int(m), "start_frames_flat_share": float(fw.flat_flags(fw.background_fraction(E.to_u8(traj["frames"][:, :1]), world.bg_rows)).mean()),
+            "dream_psnr_at": {str(t): float(r["psnr"][t - 1]) for t in at}, "freeze_psnr_at": {str(t): float(fz[t - 1]) for t in at},
+            "dream_psnr_mean": float(r["psnr"].mean()), "freeze_psnr_mean": float(fz.mean()),
+            "dream_flat_share_at_end": float(dream_flat[:, -1].mean()), "real_flat_share_at_end": float(real_flat[:, -1].mean()),
+            "dream_flat_share_last8": float(dream_flat[:, -8:].mean()), "real_flat_share_last8": float(real_flat[:, -8:].mean())}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", required=True)
@@ -94,6 +128,7 @@ def main():
     ap.add_argument("--keep", type=int, default=8, help="episodes whose dreamed and real frames are saved (uint8) for figures")
     ap.add_argument("--window", type=int, default=fw.STUCK_WINDOW)
     ap.add_argument("--out-dir", default="results", help="where the json and npz go (relative to the repository root)")
+    ap.add_argument("--only-flat-escape", action="store_true", help="add the exploratory flat-escape diagnostic to an existing prereg json and stop")
     a = ap.parse_args()
     dev = E.pick_device(a.device)
     model, step = load_ema(a.ckpt)
@@ -102,6 +137,14 @@ def main():
     assert K <= WAKE, "the wake-up frame must leave room for the context"
     game = a.game or ckpt_game(a.ckpt)
     world = rc.World(rc.load_spec(game))
+    if a.only_flat_escape:
+        path = (pathlib.Path(a.out_dir) if pathlib.Path(a.out_dir).is_absolute() else ROOT / a.out_dir) / f"prereg_{a.name}.json"
+        prev = json.loads(path.read_text())
+        assert prev["num_ctx"] == K and prev["game"] == game, "the json belongs to another model or game"
+        prev["flat_escape"] = flat_escape(world, model.denoise, K, steps=SAMPLER["steps"], ctx_sigma=SAMPLER["ctx_sigma"], init=SAMPLER["init"])
+        path.write_text(json.dumps(prev, indent=1))
+        print(json.dumps(prev["flat_escape"]), flush=True)
+        return
     t0 = time.time()
     out = {"script": "python eval_prereg.py " + " ".join(sys.argv[1:]), "checkpoint": a.ckpt, "step": step,
            "params": sum(p.numel() for p in model.parameters()), "num_ctx": K, "game": game, "device": str(dev),
@@ -140,6 +183,11 @@ def main():
     m = ev.one_step_metrics(model.denoise, val, steps=SAMPLER["steps"], ctx_sigma=SAMPLER["ctx_sigma"], init=SAMPLER["init"], K=K)
     base = ev.one_step_metrics(lambda x, s, ctx, act, sc: ctx[:, -1], val, steps=1, ctx_sigma=0.0, K=K)
     out["one_step"] = {"psnr": m["psnr"], "ssim": m["ssim"], "copy_last_psnr": base["psnr"], "n_windows": a.n_val}
+    try:                                                   # exploratory diagnostic: must never cost the pre-registered numbers
+        out["flat_escape"] = flat_escape(world, model.denoise, K, steps=SAMPLER["steps"], ctx_sigma=SAMPLER["ctx_sigma"], init=SAMPLER["init"])
+    except Exception as e:                                 # noqa: BLE001
+        out["flat_escape"] = {"error": repr(e)[:300]}
+        print("flat_escape failed:", repr(e), flush=True)
     out["eval_wall_seconds"] = time.time() - t0
 
     res = pathlib.Path(a.out_dir)

@@ -68,3 +68,20 @@ def test_eval_prereg_runs_end_to_end_on_a_tiny_8_context_checkpoint(tmp_path, mo
     again = P.analyze(z["psnr"], z["bg_dream"], z["bg_real"], window=out["collapse"]["window"])
     assert again["collapse"]["rate"] == out["collapse"]["rate"]
     assert again["tracking_horizon_20db"]["median"] == out["tracking_horizon_20db"]["median"]
+
+
+def test_flat_escape_starts_on_a_flat_wall_and_a_frozen_dream_never_leaves_it():
+    """Exploratory diagnostic (PREREG M4): start facing a wall closely with K identical frames of context, hold 'turn right'. A dream that
+    only repeats the last frame is the freeze baseline and stays on the flat wall."""
+    import eval_prereg as P
+    from game import raycaster as rc
+    world = rc.World()
+
+    def copy_last(x, sigma, ctx, act, s_c):
+        return ctx[:, -1]
+
+    r = P.flat_escape(world, copy_last, K=4, n=6, horizon=24, steps=1, ctx_sigma=0.0, init="edm")
+    assert r["episodes"] == 6 and r["start_frames_flat_share"] == 1.0
+    assert abs(r["dream_psnr_at"]["16"] - r["freeze_psnr_at"]["16"]) < 1e-3
+    assert r["dream_flat_share_at_end"] == 1.0 and r["real_flat_share_at_end"] < 0.7        # the real game turns away from the wall
+    assert set(r["dream_psnr_at"]) == {"4", "8", "16", "24"}
