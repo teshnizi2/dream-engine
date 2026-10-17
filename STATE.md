@@ -131,3 +131,12 @@ to fix the 360 degree spin; self-host the runtime and fonts before publishing.
 - `node tools/site_smoke.mjs`: 14/14 checks (also from a fresh `git clone` of the committed repo, which carries the ONNX models); `node tools/site_fuzz.mjs`: 181 random interactions, 0 errors.
 - `ffprobe` on both videos: H.264, yuv420p, 24 fps, 523 frames, 21.8 s, no audio stream (1080x1350 and 1080x1080).
 - README built by `tools/fill_readme.py` with no unresolved tokens; every number in it names its results json. Local git only: nothing pushed, deployed or posted.
+
+## Verification gate after the v3 iteration (run fresh on 2026-10-18, 01:00-01:45)
+- `python tests/make_parity_fixture.py && pytest tests -q`: 175 passed, exit 0. `node --test tests/*.test.mjs`: 20 passed, 0 failed (parity 100.0000% identical pixels, max abs diff 0, for the v2 and the v3 game, and
+  the JS flat-wall background fraction equals the Python one on 300 poses per game).
+- `node tools/site_smoke.mjs`: 16/16 checks (shipped v2 model, K = 4; also 16/16 on scratch sites with a random K = 8 model and with a smoke-trained v3 K = 8 model); `node tools/site_fuzz.mjs`: 177 random interactions, 0 errors.
+- `git status` clean; `git tag v2-final` on 43d7de4; `media/`, `site/models/` and `results/eval_full1_n64.json` are byte-identical to the tag (only `media/collapse_curve.png` was added); no git remote, nothing pushed, deployed or posted; no attribution lines in any commit message.
+- README rebuilt by `tools/fill_readme.py` with no unresolved tokens and no diff against the committed one; every number in its v3 section names a results json.
+- Order of events: `docs/PREREG-v3.md` committed 2026-10-17 20:54:47 (5b3f468); the first v3 training job started 20:55:35.
+
