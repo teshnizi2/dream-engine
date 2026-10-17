@@ -25,7 +25,7 @@ imagining every frame from the same keypresses, with no game code.
 | Twins | the same game in Python (numpy, vectorised) and JavaScript, **@@PARITY_PCT@@% identical pixels, max abs diff @@PARITY_MAXDIFF@@** over @@PARITY_FRAMES@@ frames (`results/game_parity.json`) |
 | Model | DIAMOND-style EDM U-Net, **@@PARAMS_M@@M parameters** (widths 32-64-96-128, 2 residual blocks per level, attention in the 8x8 middle block), conditioned on the last 4 frames (channel concat) and the last 4 actions (adaptive GroupNorm); context-noise augmentation from GameNGen |
 | Data | never stored: every training batch is generated on the fly by a sticky-random exploration policy (@@DATA_FPS@@ frames/s per process; coverage entropy @@COVERAGE@@ of 1.0, no open cell without samples; `results/coverage.png`) |
-| Training | ALICE (Leiden), one A100 per job, bf16, batch 128: **@@MAIN_STEPS@@ steps = @@MAIN_HOURS@@ GPU-hours** for the main run, @@TOTAL_GPUH@@ GPU-hours in total including ablations (`RUNS.md`) |
+| Training | ALICE (Leiden), one A100 per job, bf16, batch 128: **@@MAIN_STEPS@@ steps = @@MAIN_HOURS@@ GPU-hours** for the main run (Slurm wall time, including the evaluation that closes the job), @@TOTAL_GPUH@@ GPU-hours in total including ablations, smoke tests and cancelled jobs (`RUNS.md`, `results/training_summary.json`) |
 | Browser | onnxruntime-web 1.30.0, WebGPU with graph capture (fp16), WASM fallback; **@@FPS3@@ fps with 3 denoising steps, @@FPS1@@ with 1** on an Apple M4 that was shared with other jobs (see "Speed") |
 
 ## Results
