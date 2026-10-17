@@ -13,6 +13,7 @@ Shared rules: `../visual-series-RULES.md` (ALICE was approved for this project's
 | Game twins (Py `game/raycaster.py`, JS `game/raycaster.mjs`, shared `game/spec.json`) | DONE | `results/game_parity.json`: 100.0000% identical pixels, max abs diff 0 |
 | Data (`data/`) | DONE | `results/data_throughput.json`, `results/coverage.json|png` |
 | Model, `train.py` (resumable, EMA, bf16, unroll / blur / rollout-context options), `eval.py`, `export.py` | DONE, tested | `pytest tests`, `node --test tests/*.test.mjs`, `node tools/site_smoke.mjs` (see the verification note at the end) |
+| Smoke runs | DONE | local MPS run stopped at step 275 (GPU shared, 0.35 it/s, loss 1.10 -> 0.22); ALICE smoke 5246018: 3000 steps in 4.5 min, 24.9 dB one step ahead (`results/*_smoke_metrics.jsonl`, RUNS.md row 1) |
 | Main training run `full1` (150k steps, 6.77M params) | DONE | Slurm 5246233, 3.35 GPU-h, RUNS.md row 9; `runs/full1_final_ema.pt` (gitignored), metrics in `runs/full1_logs/` |
 | Final evaluation (64 episodes x 512 frames on an A100, 16 episodes of probe, M4 cross-check) | DONE | `results/eval_full1_n64.json` (primary), `results/probe_full1_a100.json`, `results/eval_full1_local.json` (M4), RUNS.md row 11 |
 | ONNX export + verification (fp32 / fp16, PyTorch vs ORT CPU vs WebGPU vs WASM) | DONE | `results/onnx_export_dream.json`, `results/onnx_browser_verification.json`, `results/browser_vs_python_1step.json` |

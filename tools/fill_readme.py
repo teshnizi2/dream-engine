@@ -57,6 +57,10 @@ def _scale_sentence(small, big):
     g1 = big["one_step_samplers_ctx0.1"]["euler2"]["psnr"] - small["one_step_samplers_ctx0.1"]["euler2"]["psnr"]
     g32 = big["rollout_primary"]["mean_psnr_first32"] - small["rollout_primary"]["mean_psnr_first32"]
     out = (f"\n\n{big['step'] / small['step']:.1f}x the training steps buy {g1:+.1f} dB one step ahead and {g32:+.1f} dB over the first 32 rollout frames.")
+    prim = load("results/eval_full1_n64.json")
+    if prim and prim["rollout_primary"]["episodes"] != big["rollout_primary"]["episodes"]:
+        out += (f" This {big['rollout_primary']['episodes']}-episode sample is an easier one for the final model ({big['rollout_primary']['mean_psnr_first32']:.1f} dB over the first 32 frames "
+                f"against {prim['rollout_primary']['mean_psnr_first32']:.1f} on the 64-episode primary sample), so compare the two rows with each other, not with the headline numbers.")
     ps, pb = small["rollout_primary"].get("per_episode_frames_until_below_20db"), big["rollout_primary"].get("per_episode_frames_until_below_20db")
     if ps and pb:
         out += f" The median tracking horizon goes from {ps['median']:.0f} to {pb['median']:.0f} frames."
@@ -175,8 +179,7 @@ def build(a):
     tok["HEUN2_DB"], tok["HEUN3_DB"], tok["EULER2_DB"] = (f"{s1_[k]['psnr']:.1f}" if k in s1_ else "n/a" for k in ("heun2", "heun3", "euler2"))
     pe20 = ro0.get("per_episode_frames_until_below_20db")
     tok["TRACK20"] = str(round(pe20["median"])) if pe20 else str(ro0.get("frames_until_psnr_below_20db", "?"))
-    tok["TRACK20_NOTE"] = (f"median of {pe20['episodes']} episodes, middle half {round(pe20['p25'])} to {round(pe20['p75'])} frames, "
-                           f"{round(100 * pe20['share_never_below'])}% never fall below within {ro0['horizon']} frames; a 5-frame average above 20 dB"
+    tok["TRACK20_NOTE"] = (f"median of {pe20['episodes']} episodes, middle half {round(pe20['p25'])} to {round(pe20['p75'])} frames; PSNR above 20 dB, 5-frame average"
                            if pe20 else "the mean curve crosses 20 dB")
     tok["TRACK_SEC"] = f"{(round(pe20['median']) if pe20 else ro0.get('frames_until_psnr_below_20db', 0)) / 30:.1f}"
     tok["ROLL_PSNR_32"] = f"{ro0['psnr_at']['32']:.1f}"
@@ -188,12 +191,13 @@ def build(a):
         beat = [k for k, d in hk.items() if d["dream_psnr_at"]["8"] > d["freeze_psnr_at"]["8"]]
         weak = min(hk, key=lambda k: hk[k]["dream_psnr_at"]["8"] - hk[k]["freeze_psnr_at"]["8"])
         if len(beat) == len(hk):
+            mg = hk[weak]["dream_psnr_at"]["8"] - hk[weak]["freeze_psnr_at"]["8"]
             tok["CONTROLS"] = (f"All {len(hk)} hold-one-key tests (move, strafe, turn and the arcs) beat \"freeze the last frame\" after 8 frames; "
-                               f"the weakest margin is {weak.replace('_', ' ')}.")
+                               f"the smallest margin is {mg:.1f} dB ({weak.replace('_', ' ')}).")
         else:
             miss = ", ".join(k.replace("_", " ") for k in hk if k not in beat)
             tok["CONTROLS"] = f"{len(beat)} of {len(hk)} hold-one-key tests beat \"freeze the last frame\" after 8 frames (not: {miss})."
-        tok["CONTROLS_NOTE"] = (f"Every key beats freezing at 8 frames; the smallest margin is {weak.replace('_', ' ')}." if len(beat) == len(hk)
+        tok["CONTROLS_NOTE"] = (f"Every key beats freezing at 8 frames; the smallest margin is {mg:.1f} dB ({weak.replace('_', ' ')})." if len(beat) == len(hk)
                                 else f"Not every key beats freezing at 8 frames ({miss}).")
     if fps:
         tok["FPS2"] = f"{fps['summary']['2']['fps_counted_median']:.0f}"
@@ -284,6 +288,21 @@ def build(a):
                         f"{worst['mean_psnr_32']:.1f} to {best['mean_psnr_32']:.1f} dB, so the setting matters little; the best was "
                         f"{best['steps']} step{'s' if best['steps'] > 1 else ''}, init `{best['init']}`, context noise {best['ctx_sigma']}. "
                         + _demo_choice(probe, ev) + f" Source: `{a.probe}`.")
+    sm_rows = []
+    for label, path in (("local Apple M4 (MPS), GPU shared", "results/local_mps_smoke_metrics.jsonl"), ("ALICE A100 (job 5246018)", "results/alice_smoke_metrics.jsonl")):
+        fp = ROOT / path
+        if not fp.exists():
+            continue
+        recs = [json.loads(l) for l in fp.read_text().splitlines() if l.strip()]
+        tr = [r for r in recs if "loss" in r]
+        ev_ = [r for r in recs if "eval_psnr_ctx0.1" in r]
+        sm_rows.append([label, tr[-1]["step"], f"{tr[0]['loss']:.2f} -> {tr[-1]['loss']:.3f}", f"{tr[-1]['elapsed_s'] / 60:.1f} min ({tr[-1]['steps_per_s']:.1f} it/s)",
+                        f"{ev_[-1]['eval_psnr_ctx0.1']:.1f} dB / {ev_[-1]['eval_ssim_ctx0.1']:.2f}" if ev_ else "not reached"])
+    if sm_rows:
+        sections.append("### Smoke tests before the main run\n\n"
+                        + table(["run", "steps", "training loss", "time", "one-step PSNR / SSIM (3 Euler steps, 128 windows)"], sm_rows)
+                        + "\n\nThe local run stopped early because the Mac's GPU was shared with other jobs (about 0.35 it/s); the ALICE smoke job is the evidence that the pipeline learns "
+                        "(its copy-last-frame baseline is quoted in RUNS.md row 1). Sources: `results/*_smoke_metrics.jsonl`, RUNS.md row 1.")
     stab = []
     for label, path in (("A100, closing eval of the training job", "results/eval_full1_alice.json"), ("A100, `eval_many`", "results/ablation/eval2_full1.json"),
                         ("A100", "results/eval_full1_a100.json"), ("Apple M4 (MPS)", "results/eval_full1_local.json"),

@@ -149,10 +149,10 @@
 
   <h3>Honest limits</h3>
   <ul>
-    <li><b>It has memorised one map.</b> It does not generalise to new levels; it knows this maze the way a person knows their own flat.</li>
+    <li><b>One map only.</b> It was trained and evaluated on this single maze. Nothing was tested on other levels, so do not expect it to generalise.</li>
     <li><b>It drifts.</b> Errors compound frame after frame. The drift panel shows the PSNR against the real game; <span data-eval="drift"></span> “Wake up” re-seeds it from the real game.</li>
     <li><b>Fine detail wobbles.</b> Thin stripes (the window gallery) and brick lines are the first things to blur or flicker.</li>
-    <li><b>Out-of-distribution play hallucinates.</b> It was trained on exploration-like movement; unusual sequences (spinning, hugging walls) are weaker.</li>
+    <li><b>Human play was not tested.</b> It was trained on exploration-like random movement. A full 360 degree spin does not bring it back to the starting view (no map memory), and long spins or hugging walls were not evaluated.</li>
     <li><b>Speed is whatever your GPU gives.</b> The ms/frame and fps readouts are measured live in this tab.</li>
   </ul>
 

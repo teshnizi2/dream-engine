@@ -209,11 +209,43 @@
    "state": "COMPLETED",
    "start": "2026-10-17T18:03:33",
    "gpu_hours": 0.10666666666666667
+  },
+  {
+   "job": "5246980",
+   "name": "dreameval",
+   "elapsed": "00:04:34",
+   "state": "COMPLETED",
+   "start": "2026-10-17T19:01:13",
+   "gpu_hours": 0.07611111111111112
+  },
+  {
+   "job": "5246981",
+   "name": "dreamevm",
+   "elapsed": "00:01:13",
+   "state": "COMPLETED",
+   "start": "2026-10-17T19:01:32",
+   "gpu_hours": 0.020277777777777777
+  },
+  {
+   "job": "5247148",
+   "name": "dreameval",
+   "elapsed": "00:06:16",
+   "state": "COMPLETED",
+   "start": "2026-10-17T19:07:11",
+   "gpu_hours": 0.10444444444444445
+  },
+  {
+   "job": "5247172",
+   "name": "dreameval",
+   "elapsed": "00:00:00",
+   "state": "CANCELLED by 3263",
+   "start": "None",
+   "gpu_hours": 0.0
   }
  ],
  "main_run": "full1",
  "main_steps": 150000,
  "main_gpu_hours": 3.345277777777778,
- "total_gpu_hours": 7.216666666666667,
- "n_jobs": 26
+ "total_gpu_hours": 7.4175,
+ "n_jobs": 30
 }
