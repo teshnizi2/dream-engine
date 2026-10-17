@@ -69,6 +69,75 @@ def _scale_sentence(small, big):
     return out
 
 
+def _load_abs(p):
+    p = pathlib.Path(p)
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def v3_section(res=None):
+    """The v3 iteration (docs/PREREG-v3.md): ablation, full run and the verdict of the pre-registered adoption rule, from the saved
+    evaluations (results/prereg_*.json, prereg_ablation.json, prereg_final_*.json). Empty if the ablation has not been evaluated."""
+    res = pathlib.Path(res) if res else ROOT / "results"
+    abl = _load_abs(res / "prereg_ablation.json")
+    if not abl:
+        return ""
+    fin = next((f for f in sorted(res.glob("prereg_final_*_vs_*.json"))), None)
+    fin = _load_abs(fin) if fin else None
+    obs = _load_abs(res / "observability_v2_v3.json")
+    sig = _load_abs(res / "signature_design_v3.json")
+
+    def row(r, label=None):
+        lo, hi = r["collapse_ci95"]
+        return [label or r["name"], r["game"], r["K"], f"{r['steps']:,}" if r.get("steps") else "", f"{r['horizon_median']:.0f} ({r['horizon_p25']:.0f} to {r['horizon_p75']:.0f})",
+                f"{r['collapse']:.3f} ({lo:.2f} to {hi:.2f})", f"{r['collapse_window1']:.3f}", f"{r['dream_flat_share']:.2f} / {r['real_flat_share']:.2f}",
+                f1(r["spin_return_psnr"]), f"{r['one_step_psnr']:.1f} ({r['copy_last_psnr']:.1f})", f1(r["mean_psnr_first32"])]
+    head = ["run", "game", "K", "steps", "median frames until < 20 dB (middle half)", "collapse rate (95% interval)", "single-frame collapse rate",
+            "flat-wall share dream / real", "360 degree spin return, dB", "1-step PSNR dB (copy-last)", "mean PSNR, first 32 frames"]
+    out = ["#### v3: can the flat-wall collapse be fixed? (pre-registered: `docs/PREREG-v3.md`)\n",
+           "Long dreams collapse onto flat wall views and stay there. The hypothesis was observability: with 4 context frames a close-up wall carries no information about where "
+           "the player is (walls of one colour region are identical, and so are N and S faces), so once the context is all wall the model has nothing to localise from. "
+           "**Game v3** gives every wall face its own low-frequency colour signature (a smooth tint of the hit position, 12 grey levels, periods of at least 5 cells) and four distinct face shades, "
+           "keeping the map, physics, floor, ceiling, fog and landmarks; the JavaScript twin stays bit-exact with the Python reference. The second change was a longer context, K = 8 against K = 4."]
+    if obs:
+        a2, a3 = obs["v2"]["noise_4"], obs["v3"]["noise_4"]
+        sep = f" The 142 visible wall faces are at least {sig['shipped']['min_face_distance']:.1f} grey levels apart (`results/signature_design_v3.json`)." if sig else ""
+        out.append(f"A model-free check on rendered frames (nearest-neighbour pose recovery from flat-wall views with noise, `results/observability_v2_v3.json`): the recovered position is within 1.5 cells "
+                   f"{100 * a2['within_1.5_cells']:.0f}% of the time in v2 and {100 * a3['within_1.5_cells']:.0f}% in v3, the heading within 45 degrees {100 * a2['heading_within_45deg']:.0f}% and {100 * a3['heading_within_45deg']:.0f}%."
+                   f" The information is in the v3 frames; whether a trained network uses it is what was tested." + sep)
+    out.append("**Metrics, fixed before any v3 model existed.** Every model wakes up at the same real frame (the 8th) on the same 64 episodes and dreams 512 frames with the demo's sampler. "
+               "*Tracking horizon*: the first frame whose 5-frame average PSNR is below 20 dB, median over episodes. *Collapse rate*: the fraction of dream frames at 64 to 512 that are *stuck on a flat wall* "
+               "(at most 5% floor or ceiling pixels in each of the last 32 frames) while the matching real frame is not; the real game itself is flat-wall in about a quarter of its frames, which is why the metric asks the dream to stay there "
+               "(window and thresholds were fixed on v2 rollouts, `docs/PREREG-v3.md` section 4). *Spin return*: PSNR between the start view and the view after a full 360 degree turn.")
+    runs = abl["runs"]
+    order = [abl["baseline"]] + [n for n in runs if n != abl["baseline"]]
+    out.append("**20k-step ablation** (same recipe as `w2_B`, one run each, 64 episodes x 512 frames):\n\n"
+               + table(head, [row(runs[n], n + (" (baseline)" if n == abl["baseline"] else "")) for n in order])
+               + f"\n\nSelection rule (fixed in advance): {abl['selection']['reason']}.")
+    if fin:
+        new, ref = fin["new"], fin["ref"]
+        ad = fin["adoption"]
+        lo, hi = fin["paired_ratio_ci95"]
+        dlo, dhi = fin["paired_median_difference_ci95"]
+        out.append(f"**Full run and the adoption rule** (150,000 steps, the recipe of `{ref['name']}`; both evaluated with the same code on the same 64 episodes):\n\n"
+                   + table(head, [row(ref, ref["name"] + " (v2, shipped before)"), row(new)])
+                   + f"\n\nThe rule: adopt only if the collapse rate is at most half of {ref['name']}'s **and** the median tracking horizon is not shorter. "
+                   f"Collapse rate {new['collapse']:.3f} against {ref['collapse']:.3f} (ratio {fin['collapse_ratio']:.2f}, paired 95% interval {lo:.2f} to {hi:.2f}): "
+                   f"{'met' if ad['A_collapse_at_most_half'] else 'not met'}. Median horizon {new['horizon_median']:.0f} against {ref['horizon_median']:.0f} frames "
+                   f"(difference {fin['horizon_median_difference']:+.0f}, paired 95% interval {dlo:+.0f} to {dhi:+.0f}): {'met' if ad['B_horizon_not_shorter'] else 'not met'}.")
+        if ad["adopt"]:
+            out.append("**The v3 model met the pre-registered rule, so the demo ships it.** What still fails is reported in the limits below; PSNR levels are not comparable across the two games "
+                       f"(copy-last-frame baseline {ref['copy_last_psnr']:.1f} dB in v2 and {new['copy_last_psnr']:.1f} dB in v3 on the same windows; unrelated-frame floor "
+                       f"{ref['unrelated_frame_psnr']:.1f} and {new['unrelated_frame_psnr']:.1f} dB), so the horizon comparison is a guard against getting worse, not a measurement of how much better.")
+        else:
+            failed = [k for k, v in (("the collapse rate was not at most half", ad["A_collapse_at_most_half"]), ("the tracking horizon got shorter", ad["B_horizon_not_shorter"])) if not v]
+            out.append(f"**v3 did not meet the pre-registered rule ({' and '.join(failed)}), so v2 stays shipped.** This is a negative result for the observability fix as tried here "
+                       "(one training run per variant, this signature design, this budget); the code, the game and all the numbers above are in the repository. "
+                       f"PSNR levels are not comparable across the two games (copy-last-frame baseline {ref['copy_last_psnr']:.1f} dB in v2 and {new['copy_last_psnr']:.1f} dB in v3; "
+                       f"unrelated-frame floor {ref['unrelated_frame_psnr']:.1f} and {new['unrelated_frame_psnr']:.1f} dB).")
+        out.append(f"Sources: `results/prereg_*.json` (`eval_prereg.py`), `results/prereg_ablation.json` and `results/prereg_final_{new['name']}_vs_{ref['name']}.json` (`tools/compare_prereg.py`); RUNS.md.")
+    return "\n\n".join(out)
+
+
 def ablation_tables():
     """What was tried (all single runs; results/ablation/*.json written by eval.py on ALICE)."""
     def ev(n):
@@ -146,6 +215,9 @@ def ablation_tables():
                      "Every row evaluated with the same code and the demo's sampler (2 Euler steps, `unit` start, context noise 0.05), 16 episodes x 256 frames.\n\n"
                      + table(["fine-tune", "1-step PSNR dB", "mean PSNR over the first 32 rollout frames", "nearest-real-frame PSNR (real frames)", "late-frame sharpness vs real"], rows)
                      + verdict)
+    v3 = v3_section()
+    if v3:
+        parts.append(v3)
     return "\n\n".join(parts)
 
 
