@@ -6,14 +6,14 @@ imagining every frame from the same keypresses, with no game code.
 
 ![hero](media/hero.png)
 
-* Video (1080x1350, 20 s): `media/dream-1080x1350.mp4` · Drift figure: `media/drift.png` · Rollout grid: `media/rollout_grid.png`
+* Video (1080x1350, 22 s; 1080x1080 cut too): `media/dream-1080x1350.mp4`, `media/dream-1080x1080.mp4` · Hero still: `media/hero.png` · Drift figure: `media/drift.png` · Rollout grid and gif: `media/rollout_grid.png`, `media/rollout.gif` · Denoising steps: `media/sampler_steps.png`
 * Run it: `cd site && python3 -m http.server 8000`, open <http://localhost:8000> in Chrome or Edge (WebGPU; falls back to WASM).
 * Nothing here is deployed or posted. Everything below was measured; each number names the file it came from.
 
 ## At a glance
 
 * **@@PARAMS_M@@M parameters**, trained for **@@MAIN_STEPS@@ steps (@@MAIN_HOURS@@ A100-hours)**; **@@FPS2@@ frames per second** in a browser tab with the default 2 denoising steps (WebGPU, fp16, Apple M4 shared with other jobs; best window @@FPS2_BEST@@).
-* One step ahead it is **@@ONE_STEP_PSNR@@ dB** (copy-the-last-frame gets @@COPY_PSNR@@ dB). Left to dream, it **tracks the real game for about @@TRACK20@@ frames** (PSNR above 20 dB), then wanders into a different, still game-like place: **@@ROLL_PSNR_32@@ dB after 32 frames, @@ROLL_PSNR_128@@ dB after 128** (an unrelated frame scores @@FLOOR_PSNR@@ dB).
+* One step ahead it is **@@ONE_STEP_PSNR@@ dB** (copy-the-last-frame gets @@COPY_PSNR@@ dB). Left to dream, it **tracks the real game for about @@TRACK20@@ frames** (@@TRACK20_NOTE@@), then wanders into a different, still game-like place: **@@ROLL_PSNR_32@@ dB after 32 frames, @@ROLL_PSNR_128@@ dB after 128** (an unrelated frame scores @@FLOOR_PSNR@@ dB).
 * @@CONTROLS@@ A full 360 degree spin does **not** return to the starting view (@@SPIN_BACK@@ dB): no map memory.
 * The biggest lesson: the bottleneck was the game, not the network (see "What was tried").
 
@@ -71,7 +71,7 @@ data/        exploration policy, on-the-fly trajectory generator, coverage heatm
 model/       U-Net (DIAMOND blocks), EDM denoiser with context noise / unrolled / blur augmentation, samplers, metrics
 train.py     resumable training (EMA, bf16, signals, time limit)      eval.py   drift / validity / control evaluation
 export.py    ONNX export (static, opset 17) + fp16 + numeric checks   alice/     setup.sh, train.slurm, submit_chain.sh, probe.slurm
-site/        the static demo (index.html, js/, models/)               tools/    benchmarks, capture, smoke test, probes
+site/        the static demo (index.html, js/, models/)               tools/    benchmarks, capture, figures, smoke test, probes
 tests/       python + node tests (TDD)                                results/  every number quoted here, as json (+ figures)
 RUNS.md      one row per ALICE experiment                             STATE.md  handoff note       POST.md  LinkedIn draft (never posted)
 ```

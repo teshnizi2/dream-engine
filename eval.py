@@ -51,6 +51,21 @@ def first_below(curve, thr):
     return int(idx[0]) + 1 if len(idx) else len(curve) + 1
 
 
+def tracking_horizons(psnr_all, thr, win=5):
+    """Per episode: the first frame whose `win`-frame window averages below `thr` dB (episodes that never cross: horizon + 1)."""
+    out = []
+    for row in np.asarray(psnr_all, dtype=float):
+        sm = np.convolve(row, np.ones(win) / win, mode="valid")          # sm[i] = mean of frames i+1 .. i+win
+        idx = np.nonzero(sm < thr)[0]
+        out.append(int(idx[0]) + 1 if len(idx) else len(row) + 1)
+    return np.array(out)
+
+
+def horizon_summary(per, horizon):
+    return {"episodes": int(len(per)), "median": float(np.median(per)), "p25": float(np.percentile(per, 25)),
+            "p75": float(np.percentile(per, 75)), "share_never_below": float(np.mean(np.asarray(per) > horizon))}
+
+
 def action_class(a):
     """Name of the action type for per-action analysis; a = (move, strafe, turn)."""
     mv, st, tu = int(a[0]), int(a[1]), int(a[2])
@@ -314,6 +329,12 @@ def main():
                              "mean_psnr_all": float(r["psnr"].mean()), "episodes": a.episodes, "horizon": L}
     out["rollout_primary"]["frames_until_psnr_below_25db"] = first_below(r["psnr"], 25.0)
     out["rollout_primary"]["frames_until_psnr_below_20db"] = first_below(r["psnr"], 20.0)
+    for thr in (25, 20):
+        out["rollout_primary"][f"per_episode_frames_until_below_{thr}db"] = {
+            "definition": f"first frame whose 5-frame window averages below {thr} dB, per episode; never = horizon + 1",
+            **horizon_summary(tracking_horizons(r["psnr_all"], float(thr)), L)}
+    pe32 = r["psnr_all"][:, :32].mean(1)
+    out["rollout_primary"]["mean_psnr_first32_sem"] = float(pe32.std(ddof=1) / np.sqrt(len(pe32))) if len(pe32) > 1 else None
     out["rollout_primary"]["sharpness_ratio_last32"] = grad_mag(r["frames"][:, -32:]) / grad_mag(long_traj["frames"][:, 4 + L - 32:4 + L])
     # does the dream stay a valid game frame even when it no longer matches the true frame?
     bank = ev.make_frame_bank(world, n=a.bank if not a.quick else 4000)

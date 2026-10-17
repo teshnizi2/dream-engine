@@ -1,0 +1,84 @@
+{
+ "script": "tools/crosscheck.py --ckpt runs/full1_final_ema.pt --ctx-sigma 0.05 --init unit",
+ "checkpoint_step": 150000,
+ "windows": 64,
+ "ctx_sigma": 0.05,
+ "init": "unit",
+ "python": {
+  "steps1": {
+   "psnr_per_noise_seed": [
+    34.15901184082031,
+    34.1323356628418,
+    34.15313720703125
+   ],
+   "psnr_mean": 34.14816157023112
+  },
+  "steps2": {
+   "psnr_per_noise_seed": [
+    34.370941162109375,
+    34.62579345703125,
+    34.582969665527344
+   ],
+   "psnr_mean": 34.52656809488932
+  },
+  "steps3": {
+   "psnr_per_noise_seed": [
+    34.299842834472656,
+    34.272705078125,
+    34.40314483642578
+   ],
+   "psnr_mean": 34.32523091634115
+  }
+ },
+ "browser": {
+  "fp32_steps1": {
+   "n": 64,
+   "dream_psnr": 34.16140989035471,
+   "copy_last_psnr": 25.178319787849478,
+   "steps": 1,
+   "ctx_sigma": 0.05,
+   "backend": "webgpu"
+  },
+  "fp32_steps2": {
+   "n": 64,
+   "dream_psnr": 34.46217615525736,
+   "copy_last_psnr": 25.178319787849478,
+   "steps": 2,
+   "ctx_sigma": 0.05,
+   "backend": "webgpu"
+  },
+  "fp32_steps3": {
+   "n": 64,
+   "dream_psnr": 34.155026830493426,
+   "copy_last_psnr": 25.178319787849478,
+   "steps": 3,
+   "ctx_sigma": 0.05,
+   "backend": "webgpu"
+  },
+  "fp16_steps1": {
+   "n": 64,
+   "dream_psnr": 34.14857967254151,
+   "copy_last_psnr": 25.178319787849478,
+   "steps": 1,
+   "ctx_sigma": 0.05,
+   "backend": "webgpu"
+  },
+  "fp16_steps2": {
+   "n": 64,
+   "dream_psnr": 34.43547598164477,
+   "copy_last_psnr": 25.178319787849478,
+   "steps": 2,
+   "ctx_sigma": 0.05,
+   "backend": "webgpu"
+  },
+  "fp16_steps3": {
+   "n": 64,
+   "dream_psnr": 34.14099056900198,
+   "copy_last_psnr": 25.178319787849478,
+   "steps": 3,
+   "ctx_sigma": 0.05,
+   "backend": "webgpu"
+  }
+ },
+ "copy_last_frame_psnr": 25.209569931030273
+}

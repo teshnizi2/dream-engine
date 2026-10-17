@@ -34,11 +34,11 @@ out = {"script": "tools/crosscheck.py " + " ".join(sys.argv[1:]), "checkpoint_st
        "ctx_sigma": a.ctx_sigma, "init": a.init, "python": {}, "browser": {}}
 copy = ev.one_step_metrics(lambda x, s, c, ac, sc: c[:, -1], val, steps=1, ctx_sigma=0.0)
 out["copy_last_frame_psnr"] = copy["psnr"]
-for steps in (1, 3):
+for steps in (1, 2, 3):
     r = [ev.one_step_metrics(model.denoise, val, steps=steps, ctx_sigma=a.ctx_sigma, init=a.init, seed=s)["psnr"] for s in range(3)]
     out["python"][f"steps{steps}"] = {"psnr_per_noise_seed": r, "psnr_mean": sum(r) / 3}
 for dtype in ("fp32", "fp16"):
-    for steps in (1, 3):
+    for steps in (1, 2, 3):
         res = subprocess.run(["node", str(ROOT / "tools/capture_eval.mjs"), "--windows", str(tmp), "--steps", str(steps), "--dtype", dtype],
                              capture_output=True, text=True, cwd=ROOT)
         line = [l for l in res.stdout.splitlines() if l.startswith("{")][-1]

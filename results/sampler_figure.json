@@ -1,0 +1,45 @@
+{
+ "script": "python tools/sampler_figure.py --ckpt runs/full1_final_ema.pt --device cpu",
+ "checkpoint_step": 150000,
+ "window_indices": [
+  0,
+  51,
+  102,
+  153,
+  204,
+  255
+ ],
+ "ctx_sigma": 0.05,
+ "init": "unit",
+ "psnr_db": {
+  "euler1": [
+   39.16,
+   39.76,
+   31.28,
+   34.18,
+   34.11,
+   35.36
+  ],
+  "euler2": [
+   41.1,
+   43.86,
+   30.59,
+   33.01,
+   33.35,
+   35.75
+  ],
+  "euler3": [
+   41.58,
+   45.43,
+   30.21,
+   32.31,
+   33.57,
+   34.63
+  ]
+ },
+ "mean_psnr_db": {
+  "euler1": 35.64,
+  "euler2": 36.28,
+  "euler3": 36.29
+ }
+}

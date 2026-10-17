@@ -33,7 +33,7 @@
   "ctx_blur_prob": 0.0,
   "ctx_blur_max": 1.5
  },
- "checkpoint_step": 20000,
+ "checkpoint_step": 150000,
  "sigma_max": 5.0,
  "sigma_min": 0.002,
  "rho": 7.0,

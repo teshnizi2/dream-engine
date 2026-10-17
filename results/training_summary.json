@@ -109,10 +109,10 @@
   {
    "job": "5246233",
    "name": "dreameng",
-   "elapsed": "00:46:53",
-   "state": "RUNNING",
+   "elapsed": "03:20:43",
+   "state": "COMPLETED",
    "start": "2026-10-17T15:13:32",
-   "gpu_hours": 0.7813888888888889
+   "gpu_hours": 3.345277777777778
   },
   {
    "job": "5246367",
@@ -181,15 +181,39 @@
   {
    "job": "5246423",
    "name": "dreameng",
-   "elapsed": "00:03:15",
-   "state": "RUNNING",
+   "elapsed": "00:12:26",
+   "state": "COMPLETED",
    "start": "2026-10-17T15:57:10",
-   "gpu_hours": 0.05416666666666667
+   "gpu_hours": 0.20722222222222222
+  },
+  {
+   "job": "5246491",
+   "name": "dreameng",
+   "elapsed": "00:02:27",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T16:13:12",
+   "gpu_hours": 0.04083333333333333
+  },
+  {
+   "job": "5246492",
+   "name": "dreameng",
+   "elapsed": "00:00:06",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T16:15:33",
+   "gpu_hours": 0.0016666666666666668
+  },
+  {
+   "job": "5246644",
+   "name": "dreamevm",
+   "elapsed": "00:06:24",
+   "state": "COMPLETED",
+   "start": "2026-10-17T18:03:33",
+   "gpu_hours": 0.10666666666666667
   }
  ],
  "main_run": "full1",
  "main_steps": 150000,
- "main_gpu_hours": 0.7813888888888889,
- "total_gpu_hours": 4.350555555555556,
- "n_jobs": 23
+ "main_gpu_hours": 3.345277777777778,
+ "total_gpu_hours": 7.216666666666667,
+ "n_jobs": 26
 }

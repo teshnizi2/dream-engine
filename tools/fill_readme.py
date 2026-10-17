@@ -26,6 +26,45 @@ def table(header, rows):
     return "\n".join(out)
 
 
+def _t20(ro):
+    pe = ro.get("per_episode_frames_until_below_20db")
+    return f"{pe['median']:.0f} (median)" if pe else f"{ro['frames_until_psnr_below_20db']} (mean curve)"
+
+
+def _demo_choice(probe, ev):
+    """Why the demo's setting (2 steps, unit start, context noise 0.05) is not simply the best row of the probe."""
+    g = {(r["steps"], r["init"], r["ctx_sigma"]): r for r in probe["grid"]}
+    lo, hi = g.get((2, "unit", 0.0)), g.get((2, "unit", 0.1))
+    s1 = ev["one_step_samplers_ctx0.1"]
+    cfg = ev.get("primary_config") or {}
+    if not (lo and hi and cfg):
+        return ""
+    return (f"The demo runs {cfg['steps']} steps, init `{cfg['init']}`, context noise {cfg['ctx_sigma']} (between the probed 0 and 0.1): "
+            f"the neighbouring probed settings score {lo['mean_psnr_32']:.1f} and {hi['mean_psnr_32']:.1f} dB, within the noise of the best, while "
+            f"one step ahead 2 steps score {s1['euler2']['psnr']:.1f} dB against {s1['euler1']['psnr']:.1f} for 1 step, and 2-step frames are visibly cleaner (see below).")
+
+
+def _final_attribution():
+    a = load("results/error_attribution_full1.json")
+    if not a:
+        return ""
+    w, e = a["by_surface"]["window_stripes"], a["strong_vertical_edges"]
+    return (f" For the final model the window panes are still {w['pixel_share_pct']:.0f}% of the pixels and {w['error_share_pct']:.0f}% of the error, and strong vertical edges "
+            f"(window frames, brick joints, wall corners) are {e['pixel_share_pct']:.0f}% of the pixels and {e['error_share_pct']:.0f}% of the squared error: thin high-contrast structure is where the model is least exact.")
+
+
+def _scale_sentence(small, big):
+    g1 = big["one_step_samplers_ctx0.1"]["euler2"]["psnr"] - small["one_step_samplers_ctx0.1"]["euler2"]["psnr"]
+    g32 = big["rollout_primary"]["mean_psnr_first32"] - small["rollout_primary"]["mean_psnr_first32"]
+    out = (f"\n\n{big['step'] / small['step']:.1f}x the training steps buy {g1:+.1f} dB one step ahead and {g32:+.1f} dB over the first 32 rollout frames.")
+    ps, pb = small["rollout_primary"].get("per_episode_frames_until_below_20db"), big["rollout_primary"].get("per_episode_frames_until_below_20db")
+    if ps and pb:
+        out += f" The median tracking horizon goes from {ps['median']:.0f} to {pb['median']:.0f} frames."
+    if g1 > 1.0 and g32 < 0.5 * g1:
+        out += " Drift is compounding error: a better one-step model shrinks it far more slowly than it improves the one-step score."
+    return out
+
+
 def ablation_tables():
     """What was tried (all single runs; results/ablation/*.json written by eval.py on ALICE)."""
     def ev(n):
@@ -47,7 +86,7 @@ def ablation_tables():
         verdict = ("width, depth and context noise were not the bottleneck." if spread <= 0.5 else "so the choice mattered at this scale.")
         parts.append("#### Architecture and context noise (game v1, 20k steps each)\n\n"
                      + table(["variant", "params", "1-step PSNR dB", "SSIM", "rollout PSNR @32 frames", "copy-last baseline"], rows)
-                     + f"\n\nThe {len(rows)} variants span {spread:.1f} dB in 1-step PSNR: {verdict}")
+                     + f"\n\nThe {len(rows)} variants span {spread:.1f} dB in 1-step PSNR: {verdict} (Evaluated at the time with 1 Euler step, `edm` start, context noise 0.1.)")
     v1, v2 = ev("abl_B"), ev("w2_B")
     at1, at2 = load("results/error_attribution_abl_B_game_v1.json"), load("results/error_attribution_w2_B.json")
     if v1 and v2 and at1 and at2:
@@ -56,18 +95,33 @@ def ablation_tables():
                 ["v2: distance pre-filtered, wide window panes", f1(v2["one_step_samplers_ctx0.1"]["euler1"]["psnr"]), f1(v2["baseline_copy_last_frame"]["psnr"]), f"{w2['error_share_pct']:.0f}% ({w2['pixel_share_pct']:.0f}% of pixels)"]]
         parts.append("#### The game, not the network, was the ceiling\n\n"
                      + table(["game version (same model and recipe, 20k steps)", "1-step PSNR dB", "copy-last baseline dB", "share of squared error on window-pane pixels"], rows)
-                     + f"\n\nWindow stripes were {w1['pixel_share_pct']:.0f}% of the pixels but {w1['error_share_pct']:.0f}% of the model's squared error; redesigning them (3 panes per wall, fading to their mean colour with distance) cut that share to {w2['error_share_pct']:.0f}%. Source: `results/error_attribution_*.json` (`tools/error_attribution.py`).")
+                     + f"\n\nWindow stripes were {w1['pixel_share_pct']:.0f}% of the pixels but {w1['error_share_pct']:.0f}% of the model's squared error; redesigning them (3 panes per wall, fading to their mean colour with distance) cut that share to {w2['error_share_pct']:.0f}%."
+                     + _final_attribution() + " Source: `results/error_attribution_*.json` (`tools/error_attribution.py`).")
+    small, big = load("results/eval_w2_B_n64.json"), load("results/eval_full1_n64.json")
+    if not (small and big):                                     # fall back to the 16 x 256 pair of the eval_many job
+        small, big = load("results/ablation/eval2_w2_B.json"), load("results/ablation/eval2_full1.json")
+    if small and big:
+        def line(e, label):
+            ro, v = e["rollout_primary"], e["validity_nearest_real_frame_psnr"]
+            return [label, f"{e['step']:,}", f1(e["one_step_samplers_ctx0.1"]["euler2"]["psnr"]), f1(ro["mean_psnr_first32"]), f1(ro["mean_psnr_first128"]),
+                    _t20(ro), f"{ro['sharpness_ratio_last32']:.2f}", f"{v['dream_mean']:.1f} ({v['real_mean']:.1f})", f1(e["spin_360"]["dream_frame72_vs_start_view_psnr"])]
+        rs, rb = small["rollout_primary"], big["rollout_primary"]
+        parts.append("#### Does more training help? (same model and recipe, game v2)\n\n"
+                     f"Same evaluation code and demo sampler (2 Euler steps, `unit` start, context noise 0.05), the same {big['rollout_primary']['episodes']} episodes x {big['rollout_primary']['horizon']} frames for both, one run each.\n\n"
+                     + table(["run", "steps", "1-step PSNR dB", "mean PSNR, first 32 frames", "mean PSNR, first 128", "frames until < 20 dB", "late-frame sharpness vs real", "nearest-real-frame PSNR (real frames)", "360 degree spin, return PSNR dB"],
+                             [line(small, "w2_B"), line(big, "full1 (the demo's model)")])
+                     + _scale_sentence(small, big))
     rows, vals = [], {}
     for n, label in (("w3_ft_plain", "plain fine-tune (control)"), ("w3_ft_unroll3", "DIAMOND-style unroll 3"), ("w3_ft_blur", "context blur augmentation"),
                      ("w3_ft_rollout3", "scheduled sampling, 3 own frames, p 0.5")):
-        r = ev(n)
-        r2 = load(f"results/ablation/eval2_{n}.json")
+        r2 = load(f"results/ablation/eval2_{n}.json")           # same eval code and the demo's sampler settings for every row
+        r = r2 or ev(n)
         if r:
             ro = roll(r)
             m32 = sum(ro["psnr_curve"][:32]) / 32
             v = r["validity_nearest_real_frame_psnr"]
-            p1 = r["one_step_samplers_ctx0.1"]["euler1"]["psnr"]
-            sharp = (roll(r2).get("sharpness_ratio_last32") if r2 else ro.get("sharpness_ratio_last32"))
+            p1 = r["one_step_samplers_ctx0.1"]["euler2" if r2 else "euler1"]["psnr"]
+            sharp = ro.get("sharpness_ratio_last32")
             vals[n] = {"label": label, "m32": m32, "p1": p1, "valid": v["dream_mean"], "real": v["real_mean"], "sharp": sharp}
             rows.append([label, f1(p1), f1(m32), f1(v["dream_mean"]) + f" ({f1(v['real_mean'])})", f"{sharp:.2f}" if sharp is not None else "n/a"])
     if rows:
@@ -85,6 +139,7 @@ def ablation_tables():
                        + (f" Scheduled sampling changes the 1-step PSNR by {vals['w3_ft_rollout3']['p1'] - base['p1']:+.1f} dB."
                           if "w3_ft_rollout3" in vals else ""))
         parts.append("#### Can training fix drift? (4k-step fine-tunes of the 20k-step model, game v2)\n\n"
+                     "Every row evaluated with the same code and the demo's sampler (2 Euler steps, `unit` start, context noise 0.05), 16 episodes x 256 frames.\n\n"
                      + table(["fine-tune", "1-step PSNR dB", "mean PSNR over the first 32 rollout frames", "nearest-real-frame PSNR (real frames)", "late-frame sharpness vs real"], rows)
                      + verdict)
     return "\n\n".join(parts)
@@ -115,7 +170,15 @@ def build(a):
     ro0 = ev.get("rollout_primary") or ev["rollout_euler3"]
     tok["ONE_STEP_PSNR"] = f"{ev['one_step_samplers_ctx0.1']['euler2']['psnr']:.1f}"
     tok["COPY_PSNR"] = f"{ev['baseline_copy_last_frame']['psnr']:.1f}"
-    tok["TRACK20"] = str(ro0.get("frames_until_psnr_below_20db", "?"))
+    tok["SHARP_PCT"] = f"{100 * ro0['sharpness_ratio_last32']:.0f}" if "sharpness_ratio_last32" in ro0 else "n/a"
+    s1_ = ev["one_step_samplers_ctx0.1"]
+    tok["HEUN2_DB"], tok["HEUN3_DB"], tok["EULER2_DB"] = (f"{s1_[k]['psnr']:.1f}" if k in s1_ else "n/a" for k in ("heun2", "heun3", "euler2"))
+    pe20 = ro0.get("per_episode_frames_until_below_20db")
+    tok["TRACK20"] = str(round(pe20["median"])) if pe20 else str(ro0.get("frames_until_psnr_below_20db", "?"))
+    tok["TRACK20_NOTE"] = (f"median of {pe20['episodes']} episodes, middle half {round(pe20['p25'])} to {round(pe20['p75'])} frames, "
+                           f"{round(100 * pe20['share_never_below'])}% never fall below within {ro0['horizon']} frames; a 5-frame average above 20 dB"
+                           if pe20 else "the mean curve crosses 20 dB")
+    tok["TRACK_SEC"] = f"{(round(pe20['median']) if pe20 else ro0.get('frames_until_psnr_below_20db', 0)) / 30:.1f}"
     tok["ROLL_PSNR_32"] = f"{ro0['psnr_at']['32']:.1f}"
     tok["ROLL_PSNR_128"] = f"{ro0['psnr_at']['128']:.1f}"
     tok["FLOOR_PSNR"] = f"{ev['baseline_unrelated_frame_psnr']:.1f}"
@@ -174,7 +237,14 @@ def build(a):
             tail = ro["psnr_curve"][128:]
             late = (f"; frames 129-{ro['horizon']} average {sum(tail) / len(tail):.1f} dB, close to the {ev['baseline_unrelated_frame_psnr']:.1f} dB "
                     "of an unrelated frame (so past that point it is a different place, not a worse copy)")
-        extra.append(f"* the mean PSNR falls below 20 dB after **{ro['frames_until_psnr_below_20db']} frames** (below 25 dB after {ro['frames_until_psnr_below_25db']})" + late)
+        pe20, pe25 = ro.get("per_episode_frames_until_below_20db"), ro.get("per_episode_frames_until_below_25db")
+        if pe20 and pe25:
+            extra.append(f"* tracking horizon per episode (first frame whose 5-frame average PSNR is below the threshold): **median {pe20['median']:.0f} frames below 20 dB** "
+                         f"(middle half {pe20['p25']:.0f} to {pe20['p75']:.0f}; {100 * pe20['share_never_below']:.0f}% of the {pe20['episodes']} episodes never fall below within {ro['horizon']} frames) "
+                         f"and median {pe25['median']:.0f} frames below 25 dB (middle half {pe25['p25']:.0f} to {pe25['p75']:.0f}); "
+                         f"the mean curve crosses 20 dB at frame {ro['frames_until_psnr_below_20db']}, pulled up by easy episodes" + late)
+        else:
+            extra.append(f"* the mean PSNR falls below 20 dB after **{ro['frames_until_psnr_below_20db']} frames** (below 25 dB after {ro['frames_until_psnr_below_25db']})" + late)
     if "sharpness_ratio_last32" in ro:
         extra.append(f"* late frames keep **{100 * ro['sharpness_ratio_last32']:.0f}%** of the real frames' edge sharpness (mean gradient magnitude, last 32 frames; 100% = as sharp as the real game)")
     if "spin_360" in ev:
@@ -183,10 +253,9 @@ def build(a):
                      f"the dream's frame 72 matches the start view at only **{sp['dream_frame72_vs_start_view_psnr']:.1f} dB** (it has no map memory to close the loop)")
     sections.append("### Drift: pure imagination against the true game\n\n"
                     f"Rollouts of {ro['horizon']} frames from 4 real frames, {ro['episodes']} episodes (exploration-policy actions), "
-                    f"Euler {cfg['steps']} step(s), init `{cfg['init']}`, context noise {cfg['ctx_sigma']}. An unrelated frame scores about "
+                    f"Euler {cfg['steps']} steps, init `{cfg['init']}`, context noise {cfg['ctx_sigma']}. An unrelated frame scores about "
                     f"{ev['baseline_unrelated_frame_psnr']:.1f} dB. "
-                    + (f"The mean PSNR falls below 20 dB at frame {ro['frames_until_psnr_below_20db']} "
-                       f"({ro['frames_until_psnr_below_20db'] / 30:.1f} s at the demo's 30 game ticks per second); after that the dream wanders to a different place."
+                    + (f"The median episode falls below 20 dB at frame {tok['TRACK20']} ({tok['TRACK_SEC']} s at the demo's 30 game ticks per second); after that the dream wanders to a different place."
                        if "frames_until_psnr_below_20db" in ro else "") + "\n\n"
                     + table(["frames since wake-up"] + ks, rows) + "\n\n" + "\n".join(extra) + "\n\n![drift](media/drift.png)")
     if "validity_nearest_real_frame_psnr" in ev:
@@ -213,7 +282,38 @@ def build(a):
                         f"{len(probe['grid'])} inference settings (1-3 Euler steps, two initialisations, context noise 0 or 0.1) over "
                         f"{probe['episodes']} episodes x {probe['horizon']} frames: mean PSNR over the first 32 frames ranges from "
                         f"{worst['mean_psnr_32']:.1f} to {best['mean_psnr_32']:.1f} dB, so the setting matters little; the best was "
-                        f"{best['steps']} step(s), init `{best['init']}`, context noise {best['ctx_sigma']}. Source: `{a.probe}`.")
+                        f"{best['steps']} step{'s' if best['steps'] > 1 else ''}, init `{best['init']}`, context noise {best['ctx_sigma']}. "
+                        + _demo_choice(probe, ev) + f" Source: `{a.probe}`.")
+    stab = []
+    for label, path in (("A100, closing eval of the training job", "results/eval_full1_alice.json"), ("A100, `eval_many`", "results/ablation/eval2_full1.json"),
+                        ("A100", "results/eval_full1_a100.json"), ("Apple M4 (MPS)", "results/eval_full1_local.json"),
+                        ("A100, **primary**", "results/eval_full1_n64.json")):
+        e = load(path)
+        if not e:
+            continue
+        r_, v_ = e["rollout_primary"], e["validity_nearest_real_frame_psnr"]
+        pe = r_.get("per_episode_frames_until_below_20db")
+        sem = r_.get("mean_psnr_first32_sem")
+        stab.append([label, f"{r_['episodes']} x {r_['horizon']}", f1(e["one_step_samplers_ctx0.1"]["euler2"]["psnr"]),
+                     f1(r_["mean_psnr_first32"]) + (f" ± {sem:.1f}" if sem else ""), f1(r_["mean_psnr_first128"]),
+                     f"{pe['median']:.0f}" if pe else "n/a", r_["frames_until_psnr_below_20db"], f"{v_['dream_mean']:.1f} ({v_['real_mean']:.1f})"])
+    if len(stab) > 1:
+        m32s = [float(r[3].split()[0]) for r in stab]
+        sections.append("### How stable are these numbers? (one checkpoint, five evaluations)\n\n"
+                        + table(["evaluation", "episodes x frames", "1-step PSNR dB", "mean PSNR, first 32 frames (± s.e.)", "mean PSNR, first 128", "median episode: frames until < 20 dB", "mean curve: frames until < 20 dB", "nearest-real-frame PSNR (real)"], stab)
+                        + f"\n\nThe one-step score does not move with the sample or the hardware. The drift statistics do: the mean over the first 32 frames ranges from {min(m32s):.1f} to {max(m32s):.1f} dB "
+                        "across episode samples (the 64-episode standard error is shown), and the mean curve's crossing of 20 dB is unstable because a few easy episodes pull it up, "
+                        "so the headline tracking horizon is the median over episodes. Different hardware draws different noise. Comparisons in \"What was tried\" are made "
+                        "only within one episode sample.")
+    sf = load("results/sampler_figure.json")
+    if sf:
+        m = sf["mean_psnr_db"]
+        cost = (f" In the browser they cost {fps['summary']['1']['ms_per_frame_median']:.0f} / {fps['summary']['2']['ms_per_frame_median']:.0f} / "
+                f"{fps['summary']['3']['ms_per_frame_median']:.0f} ms per frame (median windows)." if fps else "")
+        sections.append("### What the denoising steps change\n\n![sampler steps](media/sampler_steps.png)\n\n"
+                        f"{len(sf['window_indices'])} evenly spaced validation windows (picked by position, not by quality), same noise seed. Mean PSNR to the true next frame: "
+                        f"**{m['euler1']:.1f} dB** with 1 Euler step, **{m['euler2']:.1f}** with 2, **{m['euler3']:.1f}** with 3. One step leaves visible grain on flat surfaces "
+                        f"(second row); two steps are as clean as three, so the demo defaults to 2.{cost} Source: `results/sampler_figure.json` (`tools/sampler_figure.py`).")
     if onnx_exp:
         w = onnx_web["cases"] if onnx_web else []
         wd = {(c["model"], c["ep"], bool(c.get("capture"))): c for c in w if "max_abs_diff" in c}
@@ -224,6 +324,20 @@ def build(a):
         sections.append("### ONNX export (opset 17, batch 1, static shapes) against PyTorch\n\n"
                         + table(["precision", "size MB", "max abs diff, ONNX Runtime CPU", "max abs diff, WebGPU in the browser"], rows)
                         + "\n\nOutputs are in [-1, 1]; 1 grey level = 0.0078. Sources: `" + a.onnx + "`, `results/onnx_browser_verification.json`.")
+    bvp = load("results/browser_vs_python_1step.json")
+    if bvp:
+        rows = []
+        for st in (1, 2, 3):
+            py = bvp["python"].get(f"steps{st}")
+            b32, b16 = bvp["browser"].get(f"fp32_steps{st}"), bvp["browser"].get(f"fp16_steps{st}")
+            if py and b32 and b16:
+                rows.append([st, f"{py['psnr_mean']:.2f}", f"{b32['dream_psnr']:.2f}", f"{b16['dream_psnr']:.2f}"])
+        sections.append(f"### The whole browser pipeline against Python (same {bvp['windows']} windows)\n\n"
+                        "The JavaScript game renders the windows, the JavaScript sampler and onnxruntime-web (WebGPU) predict the next frame; "
+                        f"Python does the same with PyTorch (mean of 3 noise seeds). Copy-last-frame on these windows: {bvp['copy_last_frame_psnr']:.2f} dB, "
+                        f"context noise {bvp['ctx_sigma']}, init `{bvp['init']}`.\n\n"
+                        + table(["Euler steps", "PyTorch PSNR dB", "browser fp32 PSNR dB", "browser fp16 PSNR dB"], rows)
+                        + "\n\nSource: `results/browser_vs_python_1step.json` (`tools/crosscheck.py`). Different noise draws, so agreement within a few tenths of a dB is expected.")
     if fps:
         sm = fps["summary"]
         rows = []

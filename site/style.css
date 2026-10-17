@@ -250,7 +250,7 @@ body.capture .capnote b { color: var(--amber); font-weight: 600; }
 
 body.capture.square { height: 1080px; }
 body.capture.square .app { height: 1080px; padding: 34px 40px 22px; gap: 12px; }
-body.capture.square .tag, body.capture.square .deck, body.capture.square .credits, body.capture.square .keys-note { display: none; }
+body.capture.square .tag, body.capture.square .deck, body.capture.square .keys-note { display: none; }
 body.capture.square h1 { font-size: 56px; }
 body.capture.square .drift canvas { height: 96px; }
 

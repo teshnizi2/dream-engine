@@ -1,0 +1,63 @@
+{
+ "script": "tools/browser_fps.mjs",
+ "date": "2026-10-17T16:53:33.896Z",
+ "seconds_per_setting": 8,
+ "runs": [
+  {
+   "steps": 1,
+   "ms_per_frame_median": 66.1,
+   "fps_readout_median": 15,
+   "fps_counted": 13.788819875776396,
+   "gpu_util_during_start_pct": 19,
+   "gpu_util_during_end_pct": 8,
+   "gpu_util_others_before_pct": 7,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 2,
+   "ms_per_frame_median": 132,
+   "fps_readout_median": 8,
+   "fps_counted": 7.2112395872187,
+   "gpu_util_during_start_pct": 6,
+   "gpu_util_during_end_pct": 7,
+   "gpu_util_others_before_pct": 10,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 3,
+   "ms_per_frame_median": 231,
+   "fps_readout_median": 5,
+   "fps_counted": 4.085169596434762,
+   "gpu_util_during_start_pct": 11,
+   "gpu_util_during_end_pct": 10,
+   "gpu_util_others_before_pct": 8,
+   "quiet_gpu_at_start": true
+  }
+ ],
+ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+ "backend": "WASMfp32",
+ "params": "6.77M",
+ "summary": {
+  "1": {
+   "windows": 1,
+   "ms_per_frame_median": 66.1,
+   "ms_per_frame_best": 66.1,
+   "fps_counted_median": 13.788819875776396,
+   "fps_counted_best": 13.788819875776396
+  },
+  "2": {
+   "windows": 1,
+   "ms_per_frame_median": 132,
+   "ms_per_frame_best": 132,
+   "fps_counted_median": 7.2112395872187,
+   "fps_counted_best": 7.2112395872187
+  },
+  "3": {
+   "windows": 1,
+   "ms_per_frame_median": 231,
+   "ms_per_frame_best": 231,
+   "fps_counted_median": 4.085169596434762,
+   "fps_counted_best": 4.085169596434762
+  }
+ }
+}

@@ -198,3 +198,21 @@ def test_rollout_figures_are_rebuilt_from_the_saved_npz(tmp_path, monkeypatch):
     assert 3 * 128 < grid.size[0] < 6 * 128 and grid.size[1] > 3 * 2 * 128   # columns: frames 1, 8, 16 of 20; rows: 3 episodes x (real, dream)
     gif = Image.open(tmp_path / "media" / "rollout.gif")
     assert gif.n_frames == 10 and gif.size[1] > 64 * 3                    # 20 frames, every 2nd, labelled strips above and below
+
+
+def test_per_episode_tracking_horizon_uses_a_smoothed_curve_and_counts_never_crossing_episodes():
+    """The tracking horizon of each episode is the first frame whose 5-frame window averages below the threshold; episodes that
+    never cross count as horizon + 1. The summary reports median and quartiles over episodes (the mean curve alone is dominated
+    by a few easy episodes)."""
+    import eval as E
+    h = 40
+    steady = np.full(h, 30.0)                                     # never below 20
+    drops = np.concatenate([np.full(10, 30.0), np.full(30, 10.0)])  # the window starting at frame 9 is the first to average below 20
+    spike = steady.copy()
+    spike[3] = 5.0                                                  # one bad frame does not end tracking
+    c = np.stack([steady, drops, spike, drops])
+    per = E.tracking_horizons(c, 20.0)
+    assert per.tolist() == [h + 1, 9, h + 1, 9]
+    s = E.horizon_summary(per, h)
+    assert s["median"] == 25.0 and s["episodes"] == 4 and s["share_never_below"] == 0.5
+    assert s["p25"] <= s["median"] <= s["p75"]

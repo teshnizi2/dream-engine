@@ -1,0 +1,153 @@
+{
+ "script": "tools/browser_fps.mjs",
+ "date": "2026-10-17T16:46:21.350Z",
+ "seconds_per_setting": 8,
+ "runs": [
+  {
+   "steps": 1,
+   "ms_per_frame_median": 17.2,
+   "fps_readout_median": 30,
+   "fps_counted": 29.975124378109456,
+   "gpu_util_during_start_pct": 64,
+   "gpu_util_during_end_pct": 67,
+   "gpu_util_others_before_pct": 24,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 2,
+   "ms_per_frame_median": 29.3,
+   "fps_readout_median": 28,
+   "fps_counted": 27.477309461643667,
+   "gpu_util_during_start_pct": 76,
+   "gpu_util_during_end_pct": 80,
+   "gpu_util_others_before_pct": 30,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 3,
+   "ms_per_frame_median": 46.4,
+   "fps_readout_median": 19,
+   "fps_counted": 18.739141226110696,
+   "gpu_util_during_start_pct": 83,
+   "gpu_util_during_end_pct": 87,
+   "gpu_util_others_before_pct": 40,
+   "quiet_gpu_at_start": false
+  },
+  {
+   "steps": 1,
+   "ms_per_frame_median": 20.9,
+   "fps_readout_median": 30,
+   "fps_counted": 29.94678876376686,
+   "gpu_util_during_start_pct": 74,
+   "gpu_util_during_end_pct": 75,
+   "gpu_util_others_before_pct": 44,
+   "quiet_gpu_at_start": false
+  },
+  {
+   "steps": 1,
+   "ms_per_frame_median": 23.4,
+   "fps_readout_median": 31,
+   "fps_counted": 29.96766973389704,
+   "gpu_util_during_start_pct": 76,
+   "gpu_util_during_end_pct": 79,
+   "gpu_util_others_before_pct": 30,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 1,
+   "ms_per_frame_median": 24.2,
+   "fps_readout_median": 31,
+   "fps_counted": 30.09950248756219,
+   "gpu_util_during_start_pct": 77,
+   "gpu_util_during_end_pct": 81,
+   "gpu_util_others_before_pct": 26,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 2,
+   "ms_per_frame_median": 29.7,
+   "fps_readout_median": 29,
+   "fps_counted": 26.638582579606,
+   "gpu_util_during_start_pct": 81,
+   "gpu_util_during_end_pct": 81,
+   "gpu_util_others_before_pct": 29,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 2,
+   "ms_per_frame_median": 28.7,
+   "fps_readout_median": 29,
+   "fps_counted": 28.45830240039594,
+   "gpu_util_during_start_pct": 78,
+   "gpu_util_during_end_pct": 81,
+   "gpu_util_others_before_pct": 28,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 2,
+   "ms_per_frame_median": 28.5,
+   "fps_readout_median": 30,
+   "fps_counted": 29.27313321756388,
+   "gpu_util_during_start_pct": 82,
+   "gpu_util_during_end_pct": 82,
+   "gpu_util_others_before_pct": 27,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 3,
+   "ms_per_frame_median": 41.4,
+   "fps_readout_median": 20,
+   "fps_counted": 19.50310559006211,
+   "gpu_util_during_start_pct": 83,
+   "gpu_util_during_end_pct": 85,
+   "gpu_util_others_before_pct": 30,
+   "quiet_gpu_at_start": true
+  },
+  {
+   "steps": 3,
+   "ms_per_frame_median": 46,
+   "fps_readout_median": 19,
+   "fps_counted": 18.615040953090098,
+   "gpu_util_during_start_pct": 82,
+   "gpu_util_during_end_pct": 85,
+   "gpu_util_others_before_pct": 41,
+   "quiet_gpu_at_start": false
+  },
+  {
+   "steps": 3,
+   "ms_per_frame_median": 35.4,
+   "fps_readout_median": 24,
+   "fps_counted": 22.520841109866865,
+   "gpu_util_during_start_pct": 85,
+   "gpu_util_during_end_pct": 84,
+   "gpu_util_others_before_pct": 30,
+   "quiet_gpu_at_start": true
+  }
+ ],
+ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
+ "backend": "WebGPUfp16 · captured",
+ "params": "6.77M",
+ "summary": {
+  "1": {
+   "windows": 4,
+   "ms_per_frame_median": 23.4,
+   "ms_per_frame_best": 17.2,
+   "fps_counted_median": 29.975124378109456,
+   "fps_counted_best": 30.09950248756219
+  },
+  "2": {
+   "windows": 4,
+   "ms_per_frame_median": 29.3,
+   "ms_per_frame_best": 28.5,
+   "fps_counted_median": 28.45830240039594,
+   "fps_counted_best": 29.27313321756388
+  },
+  "3": {
+   "windows": 4,
+   "ms_per_frame_median": 46,
+   "ms_per_frame_best": 35.4,
+   "fps_counted_median": 19.50310559006211,
+   "fps_counted_best": 22.520841109866865
+  }
+ }
+}

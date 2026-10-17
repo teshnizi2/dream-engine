@@ -1,0 +1,35 @@
+{
+ "script": "tools/browser_profile.mjs",
+ "date": "2026-10-17T16:54:25.484Z",
+ "frames_per_setting": 60,
+ "settings": {
+  "1": {
+   "frames": 60,
+   "prep_ms": 0.7914166649182638,
+   "model_ms": 18.84333332777023,
+   "post_ms": 0.128000009059906
+  },
+  "2": {
+   "frames": 60,
+   "prep_ms": 0.7405000170071919,
+   "model_ms": 28.737749989827474,
+   "post_ms": 0.13883334398269653
+  },
+  "3": {
+   "frames": 60,
+   "prep_ms": 0.9211666544278463,
+   "model_ms": 37.05733335018158,
+   "post_ms": 0.18024999300638836
+  }
+ },
+ "info": {
+  "backend": "webgpu",
+  "graphCapture": true,
+  "adapter": "apple",
+  "modelBytes": 13785267,
+  "loadMs": 1922.7300000190735,
+  "dtype": "fp16",
+  "params": 6774755,
+  "steps": 2
+ }
+}

@@ -10,6 +10,13 @@ imagining every frame from the same keypresses, with no game code.
 * Run it: `cd site && python3 -m http.server 8000`, open <http://localhost:8000> in Chrome or Edge (WebGPU; falls back to WASM).
 * Nothing here is deployed or posted. Everything below was measured; each number names the file it came from.
 
+## At a glance
+
+* **6.77M parameters**, trained for **150,000 steps (3.3 A100-hours)**; **28 frames per second** in a browser tab with the default 2 denoising steps (WebGPU, fp16, Apple M4 shared with other jobs; best window 29).
+* One step ahead it is **34.0 dB** (copy-the-last-frame gets 23.9 dB). Left to dream, it **tracks the real game for about 16 frames** (median of 64 episodes, middle half 8 to 30 frames, 0% never fall below within 512 frames; a 5-frame average above 20 dB), then wanders into a different, still game-like place: **18.5 dB after 32 frames, 14.0 dB after 128** (an unrelated frame scores 12.0 dB).
+* All 8 hold-one-key tests (move, strafe, turn and the arcs) beat "freeze the last frame" after 8 frames; the weakest margin is back. A full 360 degree spin does **not** return to the starting view (18.0 dB): no map memory.
+* The biggest lesson: the bottleneck was the game, not the network (see "What was tried").
+
 ## What it is
 
 | | |
@@ -18,8 +25,8 @@ imagining every frame from the same keypresses, with no game code.
 | Twins | the same game in Python (numpy, vectorised) and JavaScript, **100.0000% identical pixels, max abs diff 0** over 1112 frames (`results/game_parity.json`) |
 | Model | DIAMOND-style EDM U-Net, **6.77M parameters** (widths 32-64-96-128, 2 residual blocks per level, attention in the 8x8 middle block), conditioned on the last 4 frames (channel concat) and the last 4 actions (adaptive GroupNorm); context-noise augmentation from GameNGen |
 | Data | never stored: every training batch is generated on the fly by a sticky-random exploration policy (1699 frames/s per process; coverage entropy 0.995 of 1.0, no open cell without samples; `results/coverage.png`) |
-| Training | ALICE (Leiden), one A100 per job, bf16, batch 128: **150,000 steps = 0.8 GPU-hours** for the main run, 4.4 GPU-hours in total including ablations (`RUNS.md`) |
-| Browser | onnxruntime-web 1.30.0, WebGPU with graph capture (fp16), WASM fallback; **19 fps with 3 denoising steps, 8 with 1** on an Apple M4 that was shared with other jobs (see "Speed") |
+| Training | ALICE (Leiden), one A100 per job, bf16, batch 128: **150,000 steps = 3.3 GPU-hours** for the main run (Slurm wall time, including the evaluation that closes the job), 7.2 GPU-hours in total including ablations, smoke tests and cancelled jobs (`RUNS.md`, `results/training_summary.json`) |
+| Browser | onnxruntime-web 1.30.0, WebGPU with graph capture (fp16), WASM fallback; **20 fps with 3 denoising steps, 30 with 1** on an Apple M4 that was shared with other jobs (see "Speed") |
 
 ## Results
 
@@ -28,72 +35,106 @@ All results are on held-out data from the game's own exploration policy unless s
 
 ### One-step prediction (the real last 4 frames + actions -> the next frame)
 
-256 fixed validation windows, context noise 0.1, init as in `eval.py`.
+256 fixed validation windows, context noise 0.05, sampler start `unit`.
 
 | method | PSNR dB | SSIM | model calls | browser ms/frame |
 |---|---|---|---|---|
 | copy the last frame (baseline) | 23.9 | 0.660 | 0 |  |
-| Euler, 1 step | 30.7 | 0.896 | 1 | 121 ms |
-| Euler, 2 steps | 30.8 | 0.898 | 2 | 236 ms |
-| Euler, 3 steps (DIAMOND) | 30.0 | 0.884 | 3 | 323 ms |
-| Heun, 2 steps (unstable here) | 5.0 | 0.034 | 3 |  |
-| Heun, 3 steps (unstable here) | 12.8 | 0.158 | 5 |  |
+| Euler, 1 step | 33.7 | 0.935 | 1 | 23 ms |
+| Euler, 2 steps | 34.0 | 0.936 | 2 | 29 ms |
+| Euler, 3 steps (DIAMOND) | 33.8 | 0.934 | 3 | 46 ms |
+| Heun, 2 steps (unstable here) | 5.7 | 0.026 | 3 |  |
+| Heun, 3 steps (unstable here) | 16.4 | 0.463 | 5 |  |
 
-Source: `results/ablation/eval_w2_B.json`, `/private/tmp/claude-501/-Users-teshnizi-Random-projects/dde2b447-a63a-4b03-bd23-7e8fad594ebf/scratchpad/dream/fps_test.json`.
+Source: `results/eval_full1_n64.json`, `results/browser_fps.json`.
 
 ### Drift: pure imagination against the true game
 
-Rollouts of 256 frames from 4 real frames, 8 episodes (exploration-policy actions), Euler 3 steps, context noise 0.05. An unrelated frame scores about 12.1 dB, so the dream follows the real game for roughly the first 8-16 frames (a quarter to half a second) and then wanders to a different place.
+Rollouts of 512 frames from 4 real frames, 64 episodes (exploration-policy actions), Euler 2 step(s), init `unit`, context noise 0.05. An unrelated frame scores about 12.0 dB. The median episode falls below 20 dB at frame 16 (0.5 s at the demo's 30 game ticks per second); after that the dream wanders to a different place.
 
-| frames since wake-up | 1 | 4 | 8 | 16 | 32 | 64 | 128 | 256 |
-|---|---|---|---|---|---|---|---|---|
-| dream (PSNR dB) | 30.7 | 26.0 | 21.7 | 18.4 | 17.6 | 17.6 | 13.9 | 14.3 |
-| dream (SSIM) | 0.88 | 0.80 | 0.72 | 0.56 | 0.60 | 0.61 | 0.57 | 0.53 |
-| freeze the last real frame (PSNR dB) | 23.1 | 20.3 | 17.7 | 14.3 | 14.2 | 15.3 | 13.3 | 13.5 |
+| frames since wake-up | 1 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 |
+|---|---|---|---|---|---|---|---|---|---|
+| dream (PSNR dB) | 35.1 | 29.2 | 25.0 | 21.7 | 18.5 | 16.2 | 14.0 | 13.3 | 12.8 |
+| dream (SSIM) | 0.95 | 0.88 | 0.78 | 0.67 | 0.60 | 0.53 | 0.49 | 0.47 | 0.47 |
+| freeze the last real frame (PSNR dB) | 25.9 | 19.1 | 17.8 | 14.2 | 13.7 | 14.1 | 13.5 | 12.9 | 12.5 |
+
+* tracking horizon per episode (first frame whose 5-frame average PSNR is below the threshold): **median 16 frames below 20 dB** (middle half 8 to 30; 0% of the 64 episodes never fall below within 512 frames) and median 7 frames below 25 dB (middle half 4 to 14); the mean curve crosses 20 dB at frame 21, pulled up by easy episodes; frames 129-512 average 13.2 dB, close to the 12.0 dB of an unrelated frame (so past that point it is a different place, not a worse copy)
+* late frames keep **47%** of the real frames' edge sharpness (mean gradient magnitude, last 32 frames; 100% = as sharp as the real game)
+* hold *turn right* for a full 360 degrees (72 frames): the real game ends on exactly the start view (100 dB), the dream's frame 72 matches the start view at only **18.0 dB** (it has no map memory to close the loop)
 
 ![drift](media/drift.png)
 
 ### Is it still a game frame?
 
-PSNR of every dreamed frame to its nearest neighbour among a bank of real frames, averaged over the rollout: **29.7 dB** for dream frames against **24.2 dB** for the true frames of the same episodes. High values late in the rollout mean the dream settles on simple, game-like views (often a wall close-up): it stays valid but loses detail (`sharpness_ratio_last32` in the probe json). Source: `results/ablation/eval_w2_B.json`.
+PSNR of every dreamed frame to its nearest neighbour among a bank of real frames, averaged over the rollout: **29.0 dB** for dream frames against **25.4 dB** for the true frames of the same episodes. High values late in the rollout mean the dream settles on simple, game-like views (often a wall close-up): it stays valid but loses detail (`sharpness_ratio_last32` in the probe json). Source: `results/eval_full1_n64.json`.
 
 ### Do the controls work? (hold one key for 24 frames from random poses)
 
 | key | dream @8 frames | freeze @8 | dream @24 | freeze @24 |
 |---|---|---|---|---|
-| forward | 23.8 | 18.7 | 20.1 | 16.5 |
-| back | 21.0 | 18.0 | 17.7 | 15.6 |
-| turn left | 22.0 | 15.1 | 16.2 | 13.6 |
-| turn right | 22.7 | 16.3 | 15.7 | 13.7 |
-| strafe left | 20.4 | 18.1 | 16.7 | 16.4 |
-| strafe right | 21.3 | 17.8 | 17.8 | 16.2 |
-| forward+left | 21.0 | 15.3 | 15.9 | 14.1 |
-| forward+right | 24.0 | 16.9 | 17.2 | 14.0 |
+| forward | 26.8 | 18.7 | 21.9 | 16.5 |
+| back | 22.9 | 18.0 | 19.1 | 15.6 |
+| turn left | 24.8 | 15.1 | 18.1 | 13.6 |
+| turn right | 24.6 | 16.3 | 17.4 | 13.7 |
+| strafe left | 23.3 | 18.1 | 19.4 | 16.4 |
+| strafe right | 22.9 | 17.8 | 18.5 | 16.2 |
+| forward+left | 23.3 | 15.3 | 17.7 | 14.1 |
+| forward+right | 26.4 | 16.9 | 18.9 | 14.0 |
 
-PSNR dB against the real game; "freeze" repeats the last real frame. Every control beats freezing; strafing is the weakest (it is the rarest action in the training data).
+PSNR dB against the real game; "freeze" repeats the last real frame. Every key beats freezing at 8 frames; the smallest margin is back. Strafing is the rarest action in the training data.
 
 ### Sampler and context-noise settings
 
-12 inference settings (1-3 Euler steps, two initialisations, context noise 0 or 0.1) over 16 episodes x 128 frames: mean PSNR over the first 32 frames ranges from 20.1 to 21.7 dB, so the setting matters little; the best was 1 step(s), init `edm`, context noise 0.0. Source: `results/ablation/probe_w2_B.json`.
+12 inference settings (1-3 Euler steps, two initialisations, context noise 0 or 0.1) over 16 episodes x 128 frames: mean PSNR over the first 32 frames ranges from 21.9 to 23.7 dB, so the setting matters little; the best was 1 step(s), init `unit`, context noise 0.0. The demo runs 2 steps, init `unit`, context noise 0.05 (between the probed 0 and 0.1): the neighbouring probed settings score 23.4 and 23.1 dB, within the noise of the best, while one step ahead 2 steps score 34.0 dB against 33.7 for 1 step, and 2-step frames are visibly cleaner (see below). Source: `results/probe_full1_a100.json`.
+
+### How stable are these numbers? (one checkpoint, five evaluations)
+
+| evaluation | episodes x frames | 1-step PSNR dB | mean PSNR, first 32 frames (± s.e.) | mean PSNR, first 128 | median episode: frames until < 20 dB | mean curve: frames until < 20 dB | nearest-real-frame PSNR (real) |
+|---|---|---|---|---|---|---|---|
+| A100, closing eval of the training job | 8 x 256 | 34.0 | 22.0 | 17.7 | n/a | 16 | 28.8 (24.2) |
+| A100, `eval_many` | 16 x 256 | 34.0 | 24.5 | 18.0 | n/a | 37 | 27.8 (24.4) |
+| A100 | 16 x 512 | 34.0 | 24.5 | 18.0 | n/a | 37 | 28.4 (24.8) |
+| Apple M4 (MPS) | 8 x 512 | 34.0 | 22.0 | 17.0 | n/a | 18 | 30.7 (24.5) |
+| A100, **primary** | 64 x 512 | 34.0 | 22.8 ± 0.6 | 17.5 | 16 | 21 | 29.0 (25.4) |
+
+The one-step score does not move with the sample or the hardware. The drift statistics do: the mean over the first 32 frames ranges from 22.0 to 24.5 dB across episode samples (the 64-episode standard error is shown), and the mean curve's crossing of 20 dB is unstable because a few easy episodes pull it up, so the headline tracking horizon is the median over episodes. Different hardware draws different noise. Comparisons in "What was tried" are made only within one episode sample.
+
+### What the denoising steps change
+
+![sampler steps](media/sampler_steps.png)
+
+6 evenly spaced validation windows (picked by position, not by quality), same noise seed. Mean PSNR to the true next frame: **35.6 dB** with 1 Euler step, **36.3** with 2, **36.3** with 3. One step leaves visible grain on flat surfaces (second row); two steps are as clean as three, so the demo defaults to 2. In the browser they cost 23 / 29 / 46 ms per frame (median windows). Source: `results/sampler_figure.json` (`tools/sampler_figure.py`).
 
 ### ONNX export (opset 17, batch 1, static shapes) against PyTorch
 
 | precision | size MB | max abs diff, ONNX Runtime CPU | max abs diff, WebGPU in the browser |
 |---|---|---|---|
-| fp32 | 27.3 | 2.8e-06 | 1.3e-06 |
-| fp16 | 13.8 | 2.4e-03 | 1.3e-02 |
+| fp32 | 27.3 | 5.2e-06 | 3.0e-06 |
+| fp16 | 13.8 | 4.8e-03 | 1.2e-02 |
 
 Outputs are in [-1, 1]; 1 grey level = 0.0078. Sources: `results/onnx_export_dream.json`, `results/onnx_browser_verification.json`.
 
+### The whole browser pipeline against Python (same 64 windows)
+
+The JavaScript game renders the windows, the JavaScript sampler and onnxruntime-web (WebGPU) predict the next frame; Python does the same with PyTorch (mean of 3 noise seeds). Copy-last-frame on these windows: 25.21 dB, context noise 0.05, init `unit`.
+
+| Euler steps | PyTorch PSNR dB | browser fp32 PSNR dB | browser fp16 PSNR dB |
+|---|---|---|---|
+| 1 | 34.15 | 34.16 | 34.15 |
+| 2 | 34.53 | 34.46 | 34.44 |
+| 3 | 34.33 | 34.16 | 34.14 |
+
+Source: `results/browser_vs_python_1step.json` (`tools/crosscheck.py`). Different noise draws, so agreement within a few tenths of a dB is expected.
+
 ### Speed in the browser (Apple M4, headless Edge, WebGPU fp16 with graph capture)
 
-| denoising steps | ms per frame, median window | fps, median window | ms per frame, best window | fps, best window | GPU busy (%) around the windows | windows |
+| denoising steps | ms per frame, median window | fps, median window | ms per frame, best window | fps, best window | GPU busy with other jobs just before the windows (%) | windows |
 |---|---|---|---|---|---|---|
-| 1 | 120.6 | 8 | 117.9 | 8 | 98-100 | 2 |
-| 2 | 235.9 | 25 | 33.1 | 25 | 80-99 | 2 |
-| 3 | 323.2 | 19 | 41.0 | 19 | 80-99 | 2 |
+| 1 | 23.4 | 30 | 17.2 | 30 | 24-44 | 4 |
+| 2 | 29.3 | 28 | 28.5 | 29 | 27-30 | 4 |
+| 3 | 46.0 | 20 | 35.4 | 23 | 30-41 | 4 |
 
-The game tick is capped at 30 per second, so the best windows read 30 fps. **The M4's GPU was shared with other jobs on this machine during all runs** (the busy column comes from `ioreg`), which is why the median windows are slower than the best ones; a quiet GPU should behave like the best windows. Source: `/private/tmp/claude-501/-Users-teshnizi-Random-projects/dde2b447-a63a-4b03-bd23-7e8fad594ebf/scratchpad/dream/fps_test.json` (`tools/browser_fps.mjs`).
+The game tick is capped at 30 per second, so the best windows read 30 fps. **The M4's GPU was shared with other jobs on this machine during all runs** (the busy column: `ioreg` utilisation sampled with this page paused), which is why the median windows are slower than the best ones; a quiet GPU should behave like the best windows. Source: `results/browser_fps.json` (`tools/browser_fps.mjs`).
 
 ## What was tried (and what did not help)
 
@@ -106,7 +147,7 @@ The game tick is capped at 30 per second, so the best windows read 30 fps. **The
 | widths 64x4, 2 blocks (DIAMOND size) | 4.47M | 28.0 | 0.843 | 17.9 | 22.2 |
 | widths 32-64-96-128, 1 block | 4.51M | 27.7 | 0.824 | 18.3 | 22.2 |
 
-All four land within 0.4 dB: width, depth and context noise were not the bottleneck.
+The 4 variants span 0.4 dB in 1-step PSNR: width, depth and context noise were not the bottleneck.
 
 #### The game, not the network, was the ceiling
 
@@ -115,23 +156,36 @@ All four land within 0.4 dB: width, depth and context noise were not the bottlen
 | v1: fine textures | 27.9 | 22.2 | 58% (5% of pixels) |
 | v2: distance pre-filtered, wide window panes | 30.7 | 23.9 | 36% (5% of pixels) |
 
-Window stripes were 5% of the pixels but 58% of the model's squared error; redesigning them (3 panes per wall, fading to their mean colour with distance) cut that share to 36%. Source: `results/error_attribution_*.json` (`tools/error_attribution.py`).
+Window stripes were 5% of the pixels but 58% of the model's squared error; redesigning them (3 panes per wall, fading to their mean colour with distance) cut that share to 36%. For the final model the window panes are still 5% of the pixels and 33% of the error, and strong vertical edges (window frames, brick joints, wall corners) are 14% of the pixels and 73% of the squared error: thin high-contrast structure is where the model is least exact. Source: `results/error_attribution_*.json` (`tools/error_attribution.py`).
+
+#### Does more training help? (same model and recipe, game v2)
+
+Same evaluation code and demo sampler (2 Euler steps, `unit` start, context noise 0.05), 16 episodes x 256 frames, one run each.
+
+| run | steps | 1-step PSNR dB | mean PSNR, first 32 frames | mean PSNR, first 128 | frames until < 20 dB | late-frame sharpness vs real | nearest-real-frame PSNR (real frames) | 360 degree spin, return PSNR dB |
+|---|---|---|---|---|---|---|---|---|
+| w2_B | 20,000 | 31.5 | 21.2 | 16.6 | 14 (mean curve) | 0.22 | 29.6 (24.4) | 15.8 |
+| full1 (the demo's model) | 150,000 | 34.0 | 24.5 | 18.0 | 37 (mean curve) | 0.47 | 27.8 (24.4) | 18.0 |
+
+7.5x the training steps buy +2.5 dB one step ahead and +3.3 dB over the first 32 rollout frames.
 
 #### Can training fix drift? (4k-step fine-tunes of the 20k-step model, game v2)
 
+Every row evaluated with the same code and the demo's sampler (2 Euler steps, `unit` start, context noise 0.05), 16 episodes x 256 frames.
+
 | fine-tune | 1-step PSNR dB | mean PSNR over the first 32 rollout frames | nearest-real-frame PSNR (real frames) | late-frame sharpness vs real |
 |---|---|---|---|---|
-| plain fine-tune (control) | 30.8 | 20.4 | 30.1 (24.2) | n/a |
-| DIAMOND-style unroll 3 | 30.8 | 20.3 | 29.5 (24.2) | 0.23 |
-| context blur augmentation | 30.8 | 20.2 | 27.5 (24.2) | n/a |
-| scheduled sampling, 3 own frames, p 0.5 | 27.9 | 18.6 | 28.7 (24.2) | 0.54 |
+| plain fine-tune (control) | 31.6 | 21.8 | 29.9 (24.4) | 0.22 |
+| DIAMOND-style unroll 3 | 31.8 | 21.6 | 29.9 (24.4) | 0.19 |
+| context blur augmentation | 31.6 | 21.5 | 29.8 (24.4) | 0.21 |
+| scheduled sampling, 3 own frames, p 0.5 | 30.9 | 21.5 | 30.8 (24.4) | 0.13 |
 
-None improved how long the dream tracks the real game (run-to-run noise is about 0.4 dB). Context blur reduced the collapse onto flat wall views; scheduled sampling sharpened late frames but made them blobby and cost 3 dB.
+Change in the mean PSNR over the first 32 frames against the plain control: DIAMOND-style unroll 3 -0.2 dB, context blur augmentation -0.2 dB, scheduled sampling, 3 own frames, p 0.5 -0.2 dB. None of them beats the control by more than the run-to-run noise (about 0.4 dB: the plain control itself moved the means by that much). Context blur: nearest-real-frame PSNR 29.8 dB against 29.9 for the control (true frames: 24.4). Scheduled sampling changes the 1-step PSNR by -0.8 dB.
 
 ## How to run
 
 ```bash
-# the demo (any static server works; WebGPU needs Chrome/Edge 113+, otherwise it runs on WASM at a few fps)
+# the demo (any static server works; WebGPU needs Chrome/Edge 113+, otherwise it runs on WASM at 7.2 fps (132 ms per frame, 2 steps, fp32, in a worker; results/browser_fps_wasm.json))
 cd site && python3 -m http.server 8000
 
 # tests: 60+ python tests (game, data, model, sampler, export, training) and the JS twin / helpers
@@ -151,11 +205,11 @@ Keys: WASD / arrows move and turn, Q/E strafe, R wake up, T dream only, P pause,
 ## Honest limits
 
 * **One fixed map, 64x64 pixels.** The network has memorised this maze (the way a person knows their own flat). It does not generalise to other levels, and nothing about it is a general game engine.
-* **It drifts.** Errors compound frame after frame: the dream tracks the real game for about the first 8-16 frames and then goes to a different place. It stays *game-like* (see the validity table) but is no longer the same place as the real panel, so "PSNR against the real game" stops being meaningful after that point. "Wake up" re-seeds it from the real game, and the page marks every wake-up on the drift chart.
+* **It drifts.** Errors compound frame after frame: the dream tracks the real game (PSNR above 20 dB) for about the first 16 frames and then goes to a different place. It stays *game-like* (see the validity table) but is no longer the same place as the real panel, so "PSNR against the real game" stops being meaningful after that point. "Wake up" re-seeds it from the real game, and the page marks every wake-up on the drift chart.
 * **It gets smoother over time.** Late in a long rollout the dreamed frames lose detail and settle on simple views (often a wall close-up): the probe reports their sharpness as a fraction of the real frames'. Edges are always softer than the real engine's pixel-exact ones, and thin features (window frames, brick joints, the rings on the pillar) are the first to blur.
 * **Out-of-distribution play is weaker.** Training data is a sticky random walk with wall avoidance, not human play. Strafing (Q/E) is the rarest action and the weakest; spinning in place or pressing into walls for a long time is further from the training distribution.
 * **Small, single-run evidence.** One architecture trained at one scale; every comparison is a single run per setting, and differences below about 0.5 dB are within run-to-run noise (an extra 4k plain fine-tuning steps moved the rollout means by 0.4 dB). Evaluation is on the game's own trajectories; there is no human study of how convincing it feels.
-* **Speed is hardware-dependent.** The fps numbers are from one Apple M4 whose GPU was shared with other jobs, in headless Edge. Other GPUs, browsers and power states differ. Without WebGPU the page falls back to WASM at a few frames per second.
+* **Speed is hardware-dependent.** The fps numbers are from one Apple M4 whose GPU was shared with other jobs, in headless Edge. Other GPUs, browsers and power states differ. Without WebGPU the page falls back to WASM: 7.2 fps (132 ms per frame, 2 steps, fp32, in a worker; results/browser_fps_wasm.json).
 * **Toy scale on purpose.** GameNGen fine-tunes a Stable Diffusion model and Genie is trained on internet video at far larger scale; this is a few million parameters, hours of A100 time, one map. It shows the recipe, not the state of the art.
 * **Heun is not a verdict on Heun.** With two or three Heun steps and the sigma range 2e-3 to 5 the sampler diverged here (5-13 dB), so Euler steps (as in DIAMOND) are used; more steps or a different schedule would likely work.
 
