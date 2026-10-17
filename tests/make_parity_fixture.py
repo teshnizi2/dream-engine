@@ -16,6 +16,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from game import raycaster as rc  # noqa: E402
 from model.sampler import build_sigmas  # noqa: E402
+from model import flatwall as fw  # noqa: E402
 
 OUT = ROOT / "tests" / "fixtures"
 
@@ -82,6 +83,7 @@ def make(spec_path, stem):
         "pose": to_lists(pose),
         "edge": to_lists(ex),
         "frame_shape": [spec["height"], spec["width"], 3],
+        "pose_bg_fraction": fw.background_fraction(pose_frames, w.bg_rows).tolist(),      # the flat-wall metric's per-frame input, for the JS twin
         "sigmas": {str(n): build_sigmas(n, 2e-3, 5.0, 7.0).double().tolist() for n in (1, 2, 3)},
     }
     (OUT / f"{stem}.json").write_text(json.dumps(meta))

@@ -8,7 +8,7 @@
 
 import * as ort from 'onnxruntime-web';
 import { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, eulerSample, quantiseFrame } from './util.mjs';
-export { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, rgbToChw, psnr, eulerSample, quantiseFrame } from './util.mjs';
+export { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, rgbToChw, psnr, eulerSample, quantiseFrame, backgroundFraction } from './util.mjs';
 
 const POOL = 1 << 20;
 

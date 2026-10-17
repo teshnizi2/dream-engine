@@ -1,6 +1,6 @@
 // Dream Engine: REAL (JS raycaster) next to DREAM (diffusion model in onnxruntime-web), same keypresses.
 import { World, stateFromSpecStart } from './game.mjs';
-import { Dream, Rng, rgbToChw, psnr, N, PIX, K, setContextLength } from './dream.mjs';
+import { Dream, Rng, rgbToChw, psnr, N, PIX, K, setContextLength, backgroundFraction } from './dream.mjs';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -122,7 +122,8 @@ async function tick(action) {
   const now = performance.now();
   tickTimes.push(now); while (tickTimes.length && now - tickTimes[0] > 1000) tickTimes.shift();
   emaMs = emaMs ? emaMs * 0.85 + out.ms * 0.15 : out.ms;
-  return { psnr: p, ms: out.ms };
+  // flat-wall metric inputs (capture mode only reads them): the share of floor/ceiling pixels of the dreamed and the real frame
+  return { psnr: p, ms: out.ms, bgDream: CAPTURE ? backgroundFraction(out.rgb, world.bg) : null, bgReal: CAPTURE ? backgroundFraction(realRGB, world.bg) : null };
 }
 
 // ------------------------------------------------------------------ readouts

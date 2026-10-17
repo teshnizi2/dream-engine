@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { World } from '../game/raycaster.mjs';
+import { backgroundFraction } from '../site/js/util.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -90,6 +91,20 @@ for (const [label, specPath, stem, outPath] of GAMES) {
       report(`edge ${i}`, r);
       assert.ok(r.same / r.total >= 0.995);
     }
+  });
+
+  test(`${label}: the flat-wall background fraction (the pre-registered metric's per-frame input) matches the Python one`, () => {
+    const base = (fx.T + 1) * fx.n_traj;
+    let worst = 0, flat = 0;
+    for (let i = 0; i < fx.n_pose; i++) {
+      const frame = blob.subarray((base + i) * FS, (base + i + 1) * FS);
+      const f = backgroundFraction(frame, world.bg);
+      worst = Math.max(worst, Math.abs(f - fx.pose_bg_fraction[i]));
+      if (f <= 0.05) flat++;
+    }
+    console.log(`  [${label} flat-wall metric] max |JS - Python| background fraction over ${fx.n_pose} poses: ${worst}; flat-wall poses: ${flat}`);
+    assert.ok(worst < 1e-12, `background fraction differs by ${worst}`);
+    assert.ok(flat > 10 && flat < fx.n_pose - 10, 'the fixture should contain both flat-wall and open views');
   });
 
   test(`${label}: noop returns the identical state values`, () => {

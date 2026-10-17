@@ -71,3 +71,17 @@ export function quantiseFrame(x, chwOut, rgbOut) {
     }
   }
 }
+
+// Share of pixels whose colour is the floor/ceiling colour of their row (within `tol` grey levels, max over the channels): the
+// per-frame input of the flat-wall metric (model/flatwall.py). rgb: HWC bytes [H*W*3]; bgRows: the game's row colours [H*3] (World.bg).
+export function backgroundFraction(rgb, bgRows, tol = 4) {
+  let n = 0;
+  for (let y = 0; y < SIZE; y++) {
+    const r = bgRows[y * 3], g = bgRows[y * 3 + 1], b = bgRows[y * 3 + 2];
+    for (let x = 0; x < SIZE; x++) {
+      const o = (y * SIZE + x) * 3;
+      if (Math.abs(rgb[o] - r) <= tol && Math.abs(rgb[o + 1] - g) <= tol && Math.abs(rgb[o + 2] - b) <= tol) n++;
+    }
+  }
+  return n / PIX;
+}

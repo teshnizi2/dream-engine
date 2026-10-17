@@ -42,19 +42,19 @@ try {
   const stills = (args['still-at'] || '').split(',').filter(Boolean).map(Number);
   const wakeEvery = +(args['wake-every'] || 0), wakeUntil = +(args['wake-until'] || Infinity);
   const notes = new Map((args.notes || '').split('|').filter(Boolean).map((s) => { const i = s.indexOf('='); return [+s.slice(0, i), s.slice(i + 1)]; }));
-  const psnrs = [];
+  const psnrs = [], bgDream = [], bgReal = [];
   for (let i = 0; i < N; i++) {
     if (notes.has(i)) await page.evaluate((t) => window.__capture.setNote(t), notes.get(i));
     if (wakeEvery && i > 0 && i % wakeEvery === 0 && i < wakeUntil) await page.evaluate(() => window.__capture.wake());
     const r = await page.evaluate((a) => window.__capture.tick(a), tour[i]);
-    psnrs.push(r.psnr);
+    psnrs.push(r.psnr); bgDream.push(r.bgDream); bgReal.push(r.bgReal);
     const file = path.join(framesDir, `frame_${String(i).padStart(5, '0')}.png`);
     await page.screenshot({ path: file, type: 'png' });
     if (stills.includes(i) && args.still) fs.copyFileSync(file, path.resolve(args.still.replace(/(\.png)?$/, `_${i}.png`)));
     if (i % 60 === 0) console.log(`tick ${i}/${N}  psnr ${r.psnr.toFixed(1)}  ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
   fs.mkdirSync(path.join(root, 'results'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'results/video_capture_psnr.json'), JSON.stringify({ script: 'tools/capture_video.mjs', ticks: N, steps: +(args.steps || 3), seed: +(args.seed || 1234), psnr_per_tick: psnrs, model: info }, null, 0));
+  fs.writeFileSync(path.join(root, 'results/video_capture_psnr.json'), JSON.stringify({ script: 'tools/capture_video.mjs', ticks: N, steps: +(args.steps || 3), seed: +(args.seed || 1234), psnr_per_tick: psnrs, bg_dream_per_tick: bgDream, bg_real_per_tick: bgReal, wake_every: wakeEvery, model: info }, null, 0));
 } finally { await browser.close(); srv.close(); }
 if (args.out) {
   const out = path.resolve(args.out);
