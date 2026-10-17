@@ -1,6 +1,6 @@
 # dream-engine: handoff note (STATE)
 
-Last updated: 2026-10-17 19:20 (everything built and measured; the last step was the verification gate, see the end of this file).
+Last updated: 2026-10-17 19:45 (everything built, measured and verified; see "Verification gate" at the end).
 
 ## Goal
 A small action-conditioned diffusion world model (DIAMOND-style EDM U-Net) trained on a first-person raycaster maze.
@@ -67,3 +67,9 @@ Shared rules: `../visual-series-RULES.md` (ALICE was approved for this project's
 ## Next steps (none required)
 Ideas if this is continued: train on human play data; a second map to test generalisation; condition on a longer context or an explicit map
 to fix the 360 degree spin; self-host the runtime and fonts before publishing.
+
+## Verification gate (run fresh on 2026-10-17, 19:14-19:42)
+- `pytest tests -q`: 82 passed. `node --test tests/*.test.mjs` (after regenerating the parity fixture): 10 passed, 0 failed.
+- `node tools/site_smoke.mjs`: 14/14 checks (also from a fresh `git clone` of the committed repo, which carries the ONNX models); `node tools/site_fuzz.mjs`: 181 random interactions, 0 errors.
+- `ffprobe` on both videos: H.264, yuv420p, 24 fps, 523 frames, 21.8 s, no audio stream (1080x1350 and 1080x1080).
+- README built by `tools/fill_readme.py` with no unresolved tokens; every number in it names its results json. Local git only: nothing pushed, deployed or posted.
