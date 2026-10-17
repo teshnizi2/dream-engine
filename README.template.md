@@ -42,7 +42,7 @@ All results are on held-out data from the game's own exploration policy unless s
 ## How to run
 
 ```bash
-# the demo (any static server works; WebGPU needs Chrome/Edge 113+, otherwise it runs on WASM at a few fps)
+# the demo (any static server works; WebGPU needs Chrome/Edge 113+, otherwise it runs on WASM at @@WASM_FPS@@)
 cd site && python3 -m http.server 8000
 
 # tests: 60+ python tests (game, data, model, sampler, export, training) and the JS twin / helpers

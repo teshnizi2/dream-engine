@@ -94,6 +94,7 @@ def build(a):
     ev = load(a.eval)
     probe = load(a.probe)
     fps = load(a.fps)
+    wasm = load(a.fps_wasm)
     parity = load("results/game_parity.json")
     thr = load("results/data_throughput.json")
     cov = load("results/coverage.json")
@@ -134,6 +135,9 @@ def build(a):
     if fps:
         tok["FPS2"] = f"{fps['summary']['2']['fps_counted_median']:.0f}"
         tok["FPS2_BEST"] = f"{fps['summary']['2']['fps_counted_best']:.0f}"
+    if wasm:
+        w2 = wasm["summary"]["2"]
+        tok["WASM_FPS"] = f"{w2['fps_counted_median']:.1f} fps ({w2['ms_per_frame_median']:.0f} ms per frame, 2 steps, fp32, in a worker; {a.fps_wasm})"
     if fps:
         tok["FPS3"] = f"{fps['summary']['3']['fps_counted_median']:.0f}"
         tok["FPS1"] = f"{fps['summary']['1']['fps_counted_median']:.0f}"
@@ -253,6 +257,7 @@ if __name__ == "__main__":
     ap.add_argument("--eval", required=True)
     ap.add_argument("--probe")
     ap.add_argument("--fps")
+    ap.add_argument("--fps-wasm", help="results json of `node tools/browser_fps.mjs --backend wasm --dtype fp32`")
     ap.add_argument("--onnx", default="results/onnx_export_dream.json")
     ap.add_argument("--training")
     ap.add_argument("--limits", default="docs/limits.md")
