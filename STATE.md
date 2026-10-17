@@ -1,6 +1,33 @@
 # dream-engine: handoff note (STATE)
 
-Last updated: 2026-10-17 19:45 (everything built, measured and verified; see "Verification gate" at the end).
+Last updated: 2026-10-17 21:10 (v3 iteration in progress, see "v3 iteration" below; v2 is finished and tagged `v2-final`).
+
+## v3 iteration (task: `BRIEF-v3.md`; pre-registration: `docs/PREREG-v3.md`)
+Goal: fix the flat-wall collapse of long dreams. Hypothesis: observability (a close-up wall says nothing about where you are).
+v2 is the fallback and stays reproducible (`git checkout v2-final`; `game/spec_v2.json` is byte-identical to its spec).
+
+| Step | Status | Evidence |
+|---|---|---|
+| Tag `v2-final` on 43d7de4 | DONE | `git tag` |
+| Context length K as a parameter (train, eval, export, tests) and `--game` spec selection | DONE | `tests/test_context_length.py`; train.py `--num-ctx --game`; checkpoints record both |
+| Flat-wall metric + pre-registered evaluation | DONE | `model/flatwall.py`, `eval_prereg.py`, `tools/flatwall_justify.py`; constants justified on 32 v2 episodes (M4): `results/prereg_full1_m4_32ep.*`, `results/flatwall_justification_full1_m4_32ep.json` |
+| Game v3 (position tint + 4 face shades), Python/JS twins | DONE | `game/spec_v3.json`, `tests/test_game_v3.py`, parity 100.0000% / max diff 0 for v2 and v3 (`results/game_parity*.json`) |
+| Design evidence (no model) | DONE | `results/signature_design_v3.json`, `results/observability_v2_v3.json` |
+| `docs/PREREG-v3.md` committed before any v3 training | see git log | |
+| ALICE: baselines, ablation (a) v2/K8, (b) v3/K4, (c) v3/K8 at 20k steps, then the full run | not started | RUNS.md |
+
+Decisions (v3):
+* **D12. The collapse metric has a persistence window.** The real game is flat-wall (no floor/ceiling visible) in 23% of its frames, so the
+  brief's single-frame definition has a floor of 0.175 for a perfectly calibrated but untracked dream against v2's 0.375 and could never be
+  halved. "Stuck on a flat wall" = the last 32 frames all flat; window, tolerance and threshold justified on v2 in the PREREG (section 4);
+  the single-frame rate is reported too.
+* **D13. Every model wakes up at real frame 8** (K = 8 needs 8 real frames), always on the first n of 64 fixed trajectories, so v2 and v3 see
+  the same paths and K = 4 / K = 8 models are scored on the same frames.
+* **D14. v3 tint:** three smooth waves of the hit position, one per colour channel (amplitude 12 grey levels, periods >= 5 cells), found by a
+  seeded search for maximal separation of the 142 visible wall faces; faces shaded W 1.00 / E 0.90 / N 0.78 / S 0.66; the pillar keeps its look.
+  Chosen on a model-free proxy (nearest-neighbour pose recovery from flat-wall frames: within 1.5 cells 46% -> 91%), not on any trained model.
+* **D15. Larger collision radius: not done** (it cannot stop the wall filling the view; it would change the dynamics so v2 and v3 episodes
+  would differ).
 
 ## Goal
 A small action-conditioned diffusion world model (DIAMOND-style EDM U-Net) trained on a first-person raycaster maze.
