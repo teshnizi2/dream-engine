@@ -1,0 +1,101 @@
+{
+ "script": "tools/bench_arch.mjs",
+ "date": "2026-10-17T15:21:34.392Z",
+ "runs": [
+  {
+   "arch": "A_diamond_64x4",
+   "file": "benchA_fp16",
+   "nfe_ms_median": 17.365000009536743,
+   "nfe_ms_p10": 15.97000002861023
+  },
+  {
+   "arch": "B_32-64-96-128",
+   "file": "benchB_fp16",
+   "nfe_ms_median": 16.894999980926514,
+   "nfe_ms_p10": 15.944999933242798
+  },
+  {
+   "arch": "A_diamond_64x4",
+   "file": "benchA_fp32",
+   "nfe_ms_median": 21.34999990463257,
+   "nfe_ms_p10": 20.509999990463257
+  },
+  {
+   "arch": "B_32-64-96-128",
+   "file": "benchB_fp32",
+   "nfe_ms_median": 17.47499990463257,
+   "nfe_ms_p10": 16.71500015258789
+  },
+  {
+   "arch": "A_diamond_64x4",
+   "file": "benchA_fp16",
+   "nfe_ms_median": 19.420000076293945,
+   "nfe_ms_p10": 18.014999866485596
+  },
+  {
+   "arch": "B_32-64-96-128",
+   "file": "benchB_fp16",
+   "nfe_ms_median": 17.15000009536743,
+   "nfe_ms_p10": 15.205000162124634
+  },
+  {
+   "arch": "A_diamond_64x4",
+   "file": "benchA_fp32",
+   "nfe_ms_median": 20.930000066757202,
+   "nfe_ms_p10": 20.019999980926514
+  },
+  {
+   "arch": "B_32-64-96-128",
+   "file": "benchB_fp32",
+   "nfe_ms_median": 16.5,
+   "nfe_ms_p10": 15.625
+  },
+  {
+   "arch": "A_diamond_64x4",
+   "file": "benchA_fp16",
+   "nfe_ms_median": 17.34999990463257,
+   "nfe_ms_p10": 16.24500012397766
+  },
+  {
+   "arch": "B_32-64-96-128",
+   "file": "benchB_fp16",
+   "nfe_ms_median": 16.71500015258789,
+   "nfe_ms_p10": 15.825000047683716
+  },
+  {
+   "arch": "A_diamond_64x4",
+   "file": "benchA_fp32",
+   "nfe_ms_median": 24.169999837875366,
+   "nfe_ms_p10": 22.41000008583069
+  },
+  {
+   "arch": "B_32-64-96-128",
+   "file": "benchB_fp32",
+   "nfe_ms_median": 17.319999933242798,
+   "nfe_ms_p10": 15.634999990463257
+  }
+ ],
+ "summary": {
+  "benchA_fp16": {
+   "arch": "A_diamond_64x4",
+   "median_of_runs_ms": 17.365000009536743,
+   "best_ms": 17.34999990463257
+  },
+  "benchB_fp16": {
+   "arch": "B_32-64-96-128",
+   "median_of_runs_ms": 16.894999980926514,
+   "best_ms": 16.71500015258789
+  },
+  "benchA_fp32": {
+   "arch": "A_diamond_64x4",
+   "median_of_runs_ms": 21.34999990463257,
+   "best_ms": 20.930000066757202
+  },
+  "benchB_fp32": {
+   "arch": "B_32-64-96-128",
+   "median_of_runs_ms": 17.319999933242798,
+   "best_ms": 16.5
+  }
+ },
+ "note": "Random-weight exports made before the conv_in padding and SiLU-fusion passes (speed only; the final graph measured separately in results/browser_profile.json). GPU shared with other jobs."
+}

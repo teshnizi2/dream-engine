@@ -251,10 +251,12 @@ def main():
             sweep[f"euler3_init={init}_ctx={cs}"] = {"psnr": m["psnr"], "ssim": m["ssim"]}
     out["one_step_ctx_init_sweep"] = sweep
     samplers = {}
+    sampler_cs = a.ctx_sigma if a.ctx_sigma >= 0 else 0.1
+    out["one_step_samplers_config"] = {"ctx_sigma": sampler_cs, "init": a.init}
     for name, steps, order in (("euler1", 1, 1), ("euler2", 2, 1), ("euler3", 3, 1), ("heun2", 2, 2), ("heun3", 3, 2)):
         torch.manual_seed(0)
         t = time.time()
-        m = ev.one_step_metrics(model.denoise, val, steps=steps, order=order, ctx_sigma=0.1, init="edm")
+        m = ev.one_step_metrics(model.denoise, val, steps=steps, order=order, ctx_sigma=sampler_cs, init=a.init)
         if dev.type == "mps":
             torch.mps.synchronize()
         samplers[name] = {"psnr": m["psnr"], "ssim": m["ssim"], "nfe": steps if order == 1 else 2 * steps - 1,
@@ -262,7 +264,7 @@ def main():
     out["one_step_samplers_ctx0.1"] = samplers
 
     # per last-action-type PSNR
-    m = ev.one_step_metrics(model.denoise, val, steps=3, ctx_sigma=0.1, init="edm")
+    m = ev.one_step_metrics(model.denoise, val, steps=a.steps, ctx_sigma=sampler_cs, init=a.init)
     mb = ev.one_step_metrics(copy, val, steps=1, ctx_sigma=0.0)
     cls = [action_class(x) for x in val["actions"][:, 3].numpy()]
     per = {}

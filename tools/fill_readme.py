@@ -93,6 +93,17 @@ def build(a):
         tok["MAIN_STEPS"] = f"{train['main_steps']:,}"
         tok["MAIN_HOURS"] = f"{train['main_gpu_hours']:.1f}"
         tok["TOTAL_GPUH"] = f"{train['total_gpu_hours']:.1f}"
+    ro0 = ev.get("rollout_primary") or ev["rollout_euler3"]
+    tok["ONE_STEP_PSNR"] = f"{ev['one_step_samplers_ctx0.1']['euler2']['psnr']:.1f}"
+    tok["COPY_PSNR"] = f"{ev['baseline_copy_last_frame']['psnr']:.1f}"
+    tok["TRACK20"] = str(ro0.get("frames_until_psnr_below_20db", "?"))
+    tok["ROLL_PSNR_32"] = f"{ro0['psnr_at']['32']:.1f}"
+    tok["ROLL_PSNR_128"] = f"{ro0['psnr_at']['128']:.1f}"
+    tok["FLOOR_PSNR"] = f"{ev['baseline_unrelated_frame_psnr']:.1f}"
+    tok["SPIN_BACK"] = f"{ev['spin_360']['dream_frame72_vs_start_view_psnr']:.1f}" if "spin_360" in ev else "n/a"
+    if fps:
+        tok["FPS2"] = f"{fps['summary']['2']['fps_counted_median']:.0f}"
+        tok["FPS2_BEST"] = f"{fps['summary']['2']['fps_counted_best']:.0f}"
     if fps:
         tok["FPS3"] = f"{fps['summary']['3']['fps_counted_median']:.0f}"
         tok["FPS1"] = f"{fps['summary']['1']['fps_counted_median']:.0f}"
@@ -111,7 +122,7 @@ def build(a):
         if name in s:
             rows.append([label + " (unstable here)", f1(s[name]["psnr"]), f"{s[name]['ssim']:.3f}", s[name]["nfe"], ""])
     sections.append("### One-step prediction (the real last 4 frames + actions -> the next frame)\n\n"
-                    f"{ev['n_val_windows']} fixed validation windows, context noise 0.1, init as in `eval.py`.\n\n"
+                    f"{ev['n_val_windows']} fixed validation windows, context noise {ev.get('one_step_samplers_config', {}).get('ctx_sigma', 0.1)}, sampler start `{ev.get('one_step_samplers_config', {}).get('init', 'edm')}`.\n\n"
                     + table(["method", "PSNR dB", "SSIM", "model calls", "browser ms/frame"], rows)
                     + "\n\nSource: `" + a.eval + "`" + (", `" + a.fps + "`" if fps else "") + ".")
     # ---- drift
