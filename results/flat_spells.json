@@ -1,0 +1,70 @@
+{
+ "script": "python tools/flat_spells.py w2_B v2k8 v3k4 v3k8 full1",
+ "frames_from": 64,
+ "runs": {
+  "w2_B": {
+   "dream": {
+    "n_spells": 167,
+    "n_ended": 111,
+    "longest": 449,
+    "median_length": 99.0,
+    "median_length_of_ended": 50.0,
+    "share_of_frames_flat": 0.8423232182628062,
+    "chance_of_leaving_per_flat_frame": 0.004596463621682057
+   }
+  },
+  "v2k8": {
+   "dream": {
+    "n_spells": 170,
+    "n_ended": 113,
+    "longest": 449,
+    "median_length": 83.0,
+    "median_length_of_ended": 48.0,
+    "share_of_frames_flat": 0.8333449331848553,
+    "chance_of_leaving_per_flat_frame": 0.004730012557555462
+   }
+  },
+  "v3k4": {
+   "dream": {
+    "n_spells": 261,
+    "n_ended": 213,
+    "longest": 449,
+    "median_length": 35.0,
+    "median_length_of_ended": 20.0,
+    "share_of_frames_flat": 0.7580734966592427,
+    "chance_of_leaving_per_flat_frame": 0.00979941111520059
+   }
+  },
+  "v3k8": {
+   "dream": {
+    "n_spells": 253,
+    "n_ended": 203,
+    "longest": 449,
+    "median_length": 25.0,
+    "median_length_of_ended": 17.0,
+    "share_of_frames_flat": 0.7064657572383074,
+    "chance_of_leaving_per_flat_frame": 0.010024196335983409
+   }
+  },
+  "full1": {
+   "dream": {
+    "n_spells": 490,
+    "n_ended": 462,
+    "longest": 449,
+    "median_length": 18.0,
+    "median_length_of_ended": 18.0,
+    "share_of_frames_flat": 0.4940144766146993,
+    "chance_of_leaving_per_flat_frame": 0.03260869565217391
+   }
+  }
+ },
+ "real_game": {
+  "n_spells": 467,
+  "n_ended": 450,
+  "longest": 282,
+  "median_length": 9.0,
+  "median_length_of_ended": 9.0,
+  "share_of_frames_flat": 0.24899081291759464,
+  "chance_of_leaving_per_flat_frame": 0.0630428691510227
+ }
+}
