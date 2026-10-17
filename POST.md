@@ -2,15 +2,15 @@
 
 Attach `media/dream-1080x1350.mp4` (or the 1080x1080 cut). Second image: `media/drift.png`.
 
-## Draft (119 words)
+## Draft (113 words)
 
 I trained a 6.8M-parameter network to be a game.
 
-Left: the real engine, plain JavaScript. Right: a diffusion model imagining every frame from the same keypresses. No game code runs on the right. 28 fps, in a browser tab.
+Left: the real engine, plain JavaScript. Right: a diffusion model imagining every frame from the same keypresses, at 28 fps in a browser tab. No game code runs on the right.
 
-It tracks the real game for about 16 frames (half a second), then dreams a different place that still looks like the game. Spin a full circle and it does not come back to the start view: no map memory.
+It tracks the real game for about 16 frames, then dreams a different place that still looks right. Spin a full circle and you end up somewhere else: no map memory. The video re-syncs it every 1.25 s.
 
-The surprise: the bottleneck was my game, not the network. Window stripes were 5% of the pixels and 58% of the error. Fixing the textures gained 2.8 dB. Four architectures landed within 0.4 dB.
+Four architectures landed within 0.4 dB. The bottleneck was my game: window stripes were 5% of the pixels and 58% of the error. Fixing the textures gained 2.8 dB.
 
 DIAMOND's recipe, 150k steps, 3.3 A100-hours.
 
