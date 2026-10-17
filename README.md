@@ -205,6 +205,7 @@ npm install && npm run smoke                       # end-to-end browser smoke te
 # train (local smoke on Apple MPS, or ALICE): see alice/ for the cluster scripts
 .venv/bin/python train.py --out runs/smoke --steps 1200 --batch 32 --device mps --time-limit-min 18
 .venv/bin/python eval.py --ckpt runs/full1/final_ema.pt --name full1
+.venv/bin/python eval_prereg.py --ckpt runs/full1/final_ema.pt --name full1       # the pre-registered v3 metrics (64 episodes x 512 frames)
 .venv/bin/python export.py --ckpt runs/full1/final_ema.pt --out site/models --name dream --fp16 --verify
 ```
 
@@ -225,14 +226,16 @@ Keys: WASD / arrows move and turn, Q/E strafe, R wake up, T dream only, P pause,
 ## Repo map
 
 ```
-game/        raycaster.py (reference), raycaster.mjs (JS twin), spec.json (map, physics, palette: single source of truth)
+game/        raycaster.py (reference), raycaster.mjs (JS twin), spec.json (the shipped game: map, physics, palette), spec_v2.json / spec_v3.json (the two frozen game versions)
 data/        exploration policy, on-the-fly trajectory generator, coverage heatmap
-model/       U-Net (DIAMOND blocks), EDM denoiser with context noise / unrolled / blur augmentation, samplers, metrics
+model/       U-Net (DIAMOND blocks), EDM denoiser with context noise / unrolled / blur augmentation, samplers, metrics, flatwall.py (the flat-wall metric)
 train.py     resumable training (EMA, bf16, signals, time limit)      eval.py   drift / validity / control evaluation
-export.py    ONNX export (static, opset 17) + fp16 + numeric checks   alice/     setup.sh, train.slurm, submit_chain.sh, probe.slurm
-site/        the static demo (index.html, js/, models/)               tools/    benchmarks, capture, figures, smoke test, probes
+eval_prereg.py  the pre-registered v3 evaluation (docs/PREREG-v3.md)  export.py ONNX export (static, opset 17) + fp16 + numeric checks
+alice/       setup.sh, train.slurm, submit_chain.sh, probe.slurm, prereg_many.slurm
+site/        the static demo (index.html, js/, models/)               tools/    benchmarks, capture, figures, smoke test, probes, v3 design and comparison tools
 tests/       python + node tests (TDD)                                results/  every number quoted here, as json (+ figures)
-RUNS.md      one row per ALICE experiment                             STATE.md  handoff note       POST.md  LinkedIn draft (never posted)
+docs/        limits.md, PREREG-v3.md                                  RUNS.md   one row per ALICE experiment
+STATE.md     handoff note                                             POST.md   LinkedIn draft (never posted)
 ```
 
 ## Credits and licences
