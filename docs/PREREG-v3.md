@@ -162,4 +162,10 @@ evidence.
 
 ## 8. Deviation log
 
-(empty at the time of writing)
+No change to a metric, constant, rule or protocol so far. Infrastructure fixes, listed so that nothing is silent:
+
+1. 2026-10-17 21:03 (commit 0391897), before any evaluation of a v3 run had run: the smoke job (300 steps, v3 game, K = 8; its numbers
+   are not used for anything) showed that `final_ema.pt` did not record which game the model was trained on, so `eval_prereg.py` would have
+   evaluated a v3 model on the v2 game. `train.py` now writes the training args into `final_ema.pt`, `export.ckpt_game` falls back to the
+   `ckpt_last.pt` next to it for runs that started earlier (the ablation runs (b) and (c) had started), and the job script passes `--game`
+   explicitly. Every evaluation json records the game it used.
