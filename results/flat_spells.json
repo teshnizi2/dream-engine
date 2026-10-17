@@ -1,5 +1,5 @@
 {
- "script": "python tools/flat_spells.py w2_B v2k8 v3k4 v3k8 full1",
+ "script": "python tools/flat_spells.py w2_B v2k8 v3k4 v3k8 full1 full2",
  "frames_from": 64,
  "runs": {
   "w2_B": {
@@ -55,6 +55,17 @@
     "median_length_of_ended": 18.0,
     "share_of_frames_flat": 0.4940144766146993,
     "chance_of_leaving_per_flat_frame": 0.03260869565217391
+   }
+  },
+  "full2": {
+   "dream": {
+    "n_spells": 383,
+    "n_ended": 344,
+    "longest": 449,
+    "median_length": 18.0,
+    "median_length_of_ended": 15.5,
+    "share_of_frames_flat": 0.6025194877505567,
+    "chance_of_leaving_per_flat_frame": 0.019913169319826337
    }
   }
  },
