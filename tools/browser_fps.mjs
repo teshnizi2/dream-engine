@@ -26,9 +26,16 @@ try {
   result.backend = await page.evaluate(() => document.getElementById('r-backend').textContent);
   result.params = await page.evaluate(() => document.getElementById('r-params').textContent);
   await page.click('#btn-auto');
-  for (const steps of [1, 2, 3]) {
+  const waitQuiet = async (maxMs) => {            // wait for 3 consecutive samples with the GPU <= 30% busy (other jobs share it)
+    const t = Date.now(); let ok = 0;
+    while (Date.now() - t < maxMs) { const u = gpuUtil(); ok = u !== null && u <= 30 ? ok + 1 : 0; if (ok >= 3) return true; await new Promise((r) => setTimeout(r, 700)); }
+    return false;
+  };
+  const repeats = +(args.repeats || 3);
+  for (const steps of [1, 2, 3, ...(repeats > 1 ? [1, 2, 3].flatMap((s) => Array(repeats - 1).fill(s)) : [])]) {
     await page.click(`.seg-b[data-steps="${steps}"]`);
-    await new Promise((r) => setTimeout(r, 2500));
+    await new Promise((r) => setTimeout(r, 1500));
+    const quiet = args['no-wait'] ? null : await waitQuiet(+(args['quiet-wait'] || 60000));
     const g0 = gpuUtil();
     const before = await page.evaluate(() => window.__ticks || 0);
     const t0 = Date.now();
@@ -42,8 +49,12 @@ try {
     const g1 = gpuUtil();
     const med = (a) => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
     result.runs.push({ steps, ms_per_frame_median: med(samples.map((s) => s.ms)), fps_readout_median: med(samples.map((s) => s.fps)),
-      fps_counted: (after - before) / dt, gpu_util_before_pct: g0, gpu_util_after_pct: g1 });
+      fps_counted: (after - before) / dt, gpu_util_before_pct: g0, gpu_util_after_pct: g1, quiet_gpu_at_start: quiet });
     console.log(JSON.stringify(result.runs[result.runs.length - 1]));
   }
+  // summary per setting: median of the windows, and the best (quietest) window
+  const med2 = (a) => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
+  result.summary = {};
+  for (const st of [1, 2, 3]) { const rs = result.runs.filter((r) => r.steps === st); result.summary[st] = { windows: rs.length, ms_per_frame_median: med2(rs.map((r) => r.ms_per_frame_median)), ms_per_frame_best: Math.min(...rs.map((r) => r.ms_per_frame_median)), fps_counted_median: med2(rs.map((r) => r.fps_counted)), fps_counted_best: Math.max(...rs.map((r) => r.fps_counted)) }; }
 } finally { await browser.close(); srv.close(); }
 if (args.out) { fs.writeFileSync(path.resolve(args.out), JSON.stringify(result, null, 1)); console.log('wrote', args.out); }
