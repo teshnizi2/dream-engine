@@ -63,9 +63,13 @@ keypresses. Spec: `BRIEF.md`. Shared rules: `../visual-series-RULES.md` (re-read
   (see `alice/`); GPU-hours used will be reported.
 - Strafe (Q/E): kept in the action space by default; hidden in the UI if it hurts quality (see decision 1).
 
-## ALICE log
-- 5246018 smoke (SMOKE, RUNS.md row 1). Wave 1 ablations 5246079/80/81/82 (20k steps each, widths/depth/context-noise), submitted 14:21.
-- Cluster folder: `~/dream-engine` (env in `~/dream-engine/env`, runs in `~/dream-engine/runs`, logs in `~/dream-engine/logs`). The reasoning-fractals builder shares the Slurm account: never cancel jobs named rf-*.
+## ALICE log (Slurm account shared with the reasoning-fractals builder: never cancel `rf-*` jobs)
+- 5246018 smoke (SMOKE). 5246058-61 cancelled (comma bug). 5246079/80/81/82 wave 1 (game v1, fine textures): all variants 27.7-28.0 dB 1-step.
+- Root cause of the ~28 dB ceiling: window-stripe pixels = 5% of pixels, 65% of the squared error -> game textures redesigned (commit 17cf67f, distance pre-filtered "mip", wide panes, fewer lines).
+- Game v2 (current): 5246231 w2_B (20k steps): 1-step 30.7 dB / SSIM 0.896 vs copy-last 23.9 (results/ablation/eval_w2_B.json). 5246233(+5246234 no-op chain) **full1: 150k steps, B arch, the main run**, ~12.6 it/s, started 15:13, ends ~18:30.
+- Wave 3 (fine-tunes of w2_B, 4k steps, lr 1e-4): 5246377 unroll=3, 5246378 plain control, 5246397 context blur 0.5/2.0. Question: do own-frame context (unroll) or blur augmentation reduce drift?
+- Probe 5246379 (w2_B, 12 sampler settings): all within noise (mean PSNR first 32 frames 20-21.7 dB); 1-step is as good as 3 and 3x faster; 'unit' init is +1.3 dB at 3 steps one-step-wise. Heun with 2 or 3 steps diverges (5 / 13 dB) -> Euler only.
+- Rollouts: dream follows the real game for ~8-16 frames (PSNR 21.7 at 8, 18.4 at 16), then wanders to a different but valid-looking place (PSNR ~ unrelated-frame floor 12 dB by 128); late frames get smoother (sharpness ratio 0.3-0.5 of the real frames) and drift toward simple wall close-ups (nearest-real-frame PSNR 31-37 dB vs 24 for real frames).
 
 ## Next steps
 1. `git commit` this milestone. Write `train.py`; local MPS smoke run (loss falls, samples look like corridors).

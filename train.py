@@ -44,6 +44,8 @@ def parse_args(argv=None):
     p.add_argument("--cond", type=int, default=256)
     p.add_argument("--ctx-noise-max", type=float, default=0.5)
     p.add_argument("--ctx-noise-prob", type=float, default=0.9)
+    p.add_argument("--ctx-blur-prob", type=float, default=0.0)
+    p.add_argument("--ctx-blur-max", type=float, default=1.5)
     p.add_argument("--unroll", type=int, default=1, help="DIAMOND-style multi-step training: later steps see the model's own denoised frames")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--prefetch", type=int, default=4)
@@ -122,7 +124,8 @@ def main(argv=None):
     cfg = DenoiserConfig(channels=tuple(int(c) for c in a.channels.split(",")),
                          depths=tuple(int(c) for c in a.depths.split(",")),
                          attn=tuple(False for _ in a.channels.split(",")), cond_channels=a.cond,
-                         ctx_noise_max=a.ctx_noise_max, ctx_noise_prob=a.ctx_noise_prob)
+                         ctx_noise_max=a.ctx_noise_max, ctx_noise_prob=a.ctx_noise_prob,
+                         ctx_blur_prob=a.ctx_blur_prob, ctx_blur_max=a.ctx_blur_max)
     torch.manual_seed(a.seed)
     model = Denoiser(cfg).to(device)
     ema = Denoiser(cfg).to(device)

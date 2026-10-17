@@ -76,6 +76,20 @@ def main():
     res = ROOT / "results"
     res.mkdir(exist_ok=True)
     (res / f"probe_{a.name}.json").write_text(json.dumps(out, indent=1))
+    # visual comparison: truth and a few sampler settings on two episodes, frames 1 8 16 32 64 128 (3x upscaled)
+    from PIL import Image
+    cols = [k for k in (1, 8, 16, 32, 64, 128) if k <= H]
+    rows = []
+    two = {k: v[:2] for k, v in traj.items()}
+    rows.append(("truth", torch.cat([torch.cat([two["frames"][e, 3 + k] for k in cols], 2) for e in range(2)], 1)))
+    for steps, init, cs in ((1, "unit", 0.05), (2, "unit", 0.05), (3, "unit", 0.05), (1, "edm", 0.05), (3, "edm", 0.05)):
+        r = ev.rollout_metrics(model.denoise, two, horizon=H, steps=steps, order=1, ctx_sigma=cs, init=init, return_frames=True, batch=2)
+        rows.append((f"{steps}-step {init} ctx{cs}", torch.cat([torch.cat([r["frames"][e, k - 1] for k in cols], 2) for e in range(2)], 1)))
+    pad = torch.full((3, 4, rows[0][1].shape[2]), -0.8)
+    img = torch.cat([x for _, x in rows for x in (x, pad)], 1)
+    arr = ((img + 1) / 2 * 255).round().clamp(0, 255).byte().permute(1, 2, 0).numpy()
+    Image.fromarray(arr).resize((arr.shape[1] * 3, arr.shape[0] * 3), Image.NEAREST).save(res / f"probe_{a.name}_grid.png")
+    (res / f"probe_{a.name}_grid.txt").write_text("rows: " + ", ".join(n for n, _ in rows) + "; columns = frames " + str(cols))
 
 
 if __name__ == "__main__":

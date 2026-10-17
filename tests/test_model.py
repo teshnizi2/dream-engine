@@ -252,3 +252,18 @@ def test_unrolled_loss_replaces_later_context_frames_with_the_models_own_denoise
     assert torch.equal(seen[1][:, :3], frames[:, 1:4])               # ... and the older ones are still real
     loss.backward()
     assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in m.parameters())
+
+
+def test_context_blur_augmentation_smooths_the_context_but_keeps_its_mean_colour():
+    torch.manual_seed(0)
+    m = tiny(ctx_noise_max=0.0, ctx_blur_prob=1.0, ctx_blur_max=2.0)
+    ctx = torch.zeros(4, 4, 3, 64, 64)
+    ctx[..., ::2] = 1.0                                             # a 1-pixel stripe pattern: pure high frequency
+    ctx[..., 0::8] = -1.0
+    blurred, _ = m.augment_context(ctx)
+    grad = lambda x: (x[..., 1:] - x[..., :-1]).abs().mean()
+    assert grad(blurred) < 0.6 * grad(ctx)
+    assert abs(float(blurred.mean() - ctx.mean())) < 0.05
+    m0 = tiny(ctx_noise_max=0.0, ctx_blur_prob=0.0)
+    same, _ = m0.augment_context(ctx)
+    assert torch.equal(same, ctx)

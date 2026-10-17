@@ -45,6 +45,8 @@ class DenoiserConfig:
     sigma_max_train: float = 20.0
     ctx_noise_max: float = 0.5
     ctx_noise_prob: float = 0.9
+    ctx_blur_prob: float = 0.0      # probability of blurring a sample's context frames (mimics the model's own smoothed frames)
+    ctx_blur_max: float = 1.5       # maximum Gaussian blur sigma in pixels (uniform in (0.4, max))
 
 
 @dataclass
@@ -115,14 +117,35 @@ class Denoiser(nn.Module):
         return self.denoise(x, sigma, ctx_flat.view(B, KC // x.shape[1], x.shape[1], H, W), act, s_c)
 
     # -------------------------------------------------------------- training
+    def _blur(self, ctx: Tensor, sigma: Tensor) -> Tensor:
+        """Per-sample Gaussian blur of the K context frames (separable, reflect padding). sigma [B] pixels."""
+        B, K, C, H, W = ctx.shape
+        r = 4
+        xs = torch.arange(-r, r + 1, device=ctx.device, dtype=ctx.dtype)
+        k = torch.exp(-(xs[None] ** 2) / (2 * sigma[:, None] ** 2))          # [B, 2r+1]
+        k = k / k.sum(1, keepdim=True)
+        x = ctx.reshape(1, B * K * C, H, W)
+        kk = k[:, None, None, :].expand(B, K * C, 1, 2 * r + 1).reshape(B * K * C, 1, 1, 2 * r + 1)
+        x = F.pad(x, (r, r, 0, 0), mode="reflect")
+        x = F.conv2d(x, kk, groups=B * K * C)
+        x = F.pad(x, (0, 0, r, r), mode="reflect")
+        x = F.conv2d(x, kk.transpose(2, 3), groups=B * K * C)
+        return x.reshape(B, K, C, H, W)
+
     def augment_context(self, ctx: Tensor) -> Tuple[Tensor, Tensor]:
-        """Noise the context frames with a per-sample level sigma_c ~ U(0, ctx_noise_max) (prob ctx_noise_prob)."""
+        """Context-noise augmentation (GameNGen): noise with a per-sample level sigma_c ~ U(0, ctx_noise_max) (prob
+        ctx_noise_prob); optionally also blur the context (prob ctx_blur_prob). Returns (context, sigma_c)."""
         B = ctx.shape[0]
         c = self.cfg
-        s_c = torch.rand(B, device=ctx.device) * c.ctx_noise_max
-        s_c = s_c * (torch.rand(B, device=ctx.device) < c.ctx_noise_prob).float()
+        if c.ctx_blur_prob > 0:
+            do = (torch.rand(B, device=ctx.device) < c.ctx_blur_prob)
+            sig = 0.4 + torch.rand(B, device=ctx.device) * max(c.ctx_blur_max - 0.4, 1e-3)
+            blurred = self._blur(ctx, sig)
+            ctx = torch.where(do.view(B, 1, 1, 1, 1), blurred, ctx)
         if c.ctx_noise_max <= 0:
             return ctx, torch.zeros(B, device=ctx.device)
+        s_c = torch.rand(B, device=ctx.device) * c.ctx_noise_max
+        s_c = s_c * (torch.rand(B, device=ctx.device) < c.ctx_noise_prob).float()
         return ctx + torch.randn_like(ctx) * s_c.view(B, 1, 1, 1, 1), s_c
 
     def loss_unrolled(self, frames: Tensor, act: Tensor, unroll: int = 1):

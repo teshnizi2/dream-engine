@@ -41,7 +41,7 @@ nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
 python train.py --out "runs/$RUN" --steps "$STEPS" --batch "$BATCH" --lr "$LR" --channels "${CHANNELS//-/,}" \
   --depths "${DEPTHS//-/,}" --ema "$EMA" --device cuda --amp bf16 --workers "$WORKERS" --resume \
   --time-limit-min "$TIME_LIMIT_MIN" --eval-every "$EVAL_EVERY" --eval-n 128 --ckpt-every "$CKPT_EVERY" \
-  --milestone-every 20000 --log-every 100 ${INIT_FROM:+--init-from "$INIT_FROM"} ${UNROLL:+--unroll "$UNROLL"} ${EXTRA_ARGS:-}
+  --milestone-every 20000 --log-every 100 ${INIT_FROM:+--init-from "$INIT_FROM"} ${UNROLL:+--unroll "$UNROLL"} ${BLUR_PROB:+--ctx-blur-prob "$BLUR_PROB"} ${BLUR_MAX:+--ctx-blur-max "$BLUR_MAX"} ${EXTRA_ARGS:-}
 if [ "${RUN_EVAL:-0}" = "1" ] && [ -f "runs/$RUN/final_ema.pt" ]; then
   mkdir -p results
   python eval.py --ckpt "runs/$RUN/final_ema.pt" --name "$RUN" --no-figs --episodes "${EVAL_EPISODES:-8}" --long "${EVAL_LONG:-256}" --device cuda
