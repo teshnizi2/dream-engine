@@ -11,6 +11,12 @@ const MIME = {
   '.png': 'image/png', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
 };
 
+// `--root <dir>` on any tool's command line serves another folder that contains site/ (e.g. a scratch copy with a different model).
+export function rootFromArgs(defaultRoot) {
+  const i = process.argv.indexOf('--root');
+  return path.resolve(i > 0 ? process.argv[i + 1] : defaultRoot);
+}
+
 export function startServer(root, port = 0) {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {

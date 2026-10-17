@@ -7,10 +7,10 @@ import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { startServer } from './serve.mjs';
+import { startServer, rootFromArgs } from './serve.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+const root = rootFromArgs(path.resolve(here, '..'));
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) => { if (a.startsWith('--')) acc.push([a.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : 'true']); return acc; }, []));
 const gpuUtil = () => { try { const o = execSync('ioreg -r -d 1 -w0 -c AGXAccelerator', { encoding: 'utf8' }); const m = o.match(/"Device Utilization %"=(\d+)/); return m ? +m[1] : null; } catch (e) { return null; } };
 const srv = await startServer(root, 0);

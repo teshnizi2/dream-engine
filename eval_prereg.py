@@ -141,7 +141,8 @@ def main():
         path = (pathlib.Path(a.out_dir) if pathlib.Path(a.out_dir).is_absolute() else ROOT / a.out_dir) / f"prereg_{a.name}.json"
         prev = json.loads(path.read_text())
         assert prev["num_ctx"] == K and prev["game"] == game, "the json belongs to another model or game"
-        prev["flat_escape"] = flat_escape(world, model.denoise, K, steps=SAMPLER["steps"], ctx_sigma=SAMPLER["ctx_sigma"], init=SAMPLER["init"])
+        prev["flat_escape"] = {**flat_escape(world, model.denoise, K, steps=SAMPLER["steps"], ctx_sigma=SAMPLER["ctx_sigma"], init=SAMPLER["init"]),
+                               "device": str(dev), "script": "python eval_prereg.py " + " ".join(sys.argv[1:])}
         path.write_text(json.dumps(prev, indent=1))
         print(json.dumps(prev["flat_escape"]), flush=True)
         return

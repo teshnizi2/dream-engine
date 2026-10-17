@@ -5,10 +5,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { startServer } from './serve.mjs';
+import { startServer, rootFromArgs } from './serve.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+const root = rootFromArgs(path.resolve(here, '..'));
 const srv = await startServer(root, 0);
 const browser = await puppeteer.launch({ executablePath: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', headless: 'new', args: ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--ignore-gpu-blocklist'] });
 const configs = [
@@ -22,6 +22,7 @@ try {
   await page.waitForFunction('window.__bench', { timeout: 600000 });
   const r = await page.evaluate(() => window.__bench);
   const out = { script: 'tools/verify_onnx_browser.mjs', date: new Date().toISOString(), adapter: await page.evaluate(async () => { const a = await navigator.gpu?.requestAdapter(); return a ? { description: a.info?.description, features: [...a.features].filter((f) => f.includes('f16')) } : null; }), ...r };
+  fs.mkdirSync(path.join(root, 'results'), { recursive: true });
   fs.writeFileSync(path.join(root, 'results/onnx_browser_verification.json'), JSON.stringify(out, null, 1));
   for (const c of r.cases || []) console.log(c.model, c.ep, c.capture ? 'captured' : '', c.error ? 'ERROR ' + c.error.slice(0, 100) : `max abs diff vs PyTorch ${c.max_abs_diff.toExponential(2)}`);
 } finally { await browser.close(); srv.close(); }

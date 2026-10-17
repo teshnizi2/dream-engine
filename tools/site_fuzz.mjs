@@ -3,13 +3,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { startServer } from './serve.mjs';
+import { startServer, rootFromArgs } from './serve.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) => { if (a.startsWith('--')) acc.push([a.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : 'true']); return acc; }, []));
 let seed = +(args.seed || 1);
 const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 const pick = (a) => a[Math.floor(rnd() * a.length)];
-const srv = await startServer(path.resolve(here, '..'), 0);
+const srv = await startServer(rootFromArgs(path.resolve(here, '..')), 0);
 const browser = await puppeteer.launch({ executablePath: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', headless: 'new', args: ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--ignore-gpu-blocklist'] });
 const errors = [];
 try {

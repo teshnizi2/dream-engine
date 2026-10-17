@@ -8,10 +8,10 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { startServer } from './serve.mjs';
+import { startServer, rootFromArgs } from './serve.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+const root = rootFromArgs(path.resolve(here, '..'));
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) => { if (a.startsWith('--')) acc.push([a.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : 'true']); return acc; }, []));
 const FPS = +(args.fps || 24);
 const tour = JSON.parse(fs.readFileSync(path.join(root, 'site/js/tour.json'), 'utf8')).actions;
@@ -53,6 +53,7 @@ try {
     if (stills.includes(i) && args.still) fs.copyFileSync(file, path.resolve(args.still.replace(/(\.png)?$/, `_${i}.png`)));
     if (i % 60 === 0) console.log(`tick ${i}/${N}  psnr ${r.psnr.toFixed(1)}  ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
+  fs.mkdirSync(path.join(root, 'results'), { recursive: true });
   fs.writeFileSync(path.join(root, 'results/video_capture_psnr.json'), JSON.stringify({ script: 'tools/capture_video.mjs', ticks: N, steps: +(args.steps || 3), seed: +(args.seed || 1234), psnr_per_tick: psnrs, model: info }, null, 0));
 } finally { await browser.close(); srv.close(); }
 if (args.out) {

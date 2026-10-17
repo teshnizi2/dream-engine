@@ -285,7 +285,7 @@ async function boot() {
     try { meta = await (await fetch('models/dream_meta.json')).json(); } catch (e) { meta = {}; }
     setContextLength(meta.config?.num_ctx ?? 4);                  // the model's context length (v2: 4); everything below reads K
     const WORDS = { 4: 'four', 8: 'eight' };
-    document.querySelectorAll('[data-k]').forEach((el) => { el.textContent = el.dataset.k === 'word' ? (WORDS[K] || String(K)) : String(K); });
+    document.querySelectorAll('[data-ctx]').forEach((el) => { el.textContent = el.dataset.ctx === 'word' ? (WORDS[K] || String(K)) : String(K); });
     try { tour = (await (await fetch('js/tour.json')).json()).actions; } catch (e) { tour = []; }
     try {
       const ev = await (await fetch('models/eval_summary.json')).json();

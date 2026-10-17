@@ -397,5 +397,30 @@
   "copy_last_psnr": 24.201534271240234,
   "n_windows": 256
  },
- "eval_wall_seconds": 112.94853115081787
+ "eval_wall_seconds": 112.94853115081787,
+ "flat_escape": {
+  "definition": "start on a flat-wall frame, 4 identical context frames, hold turn-right for 24 frames; exploratory, not pre-registered as decisive",
+  "episodes": 64,
+  "start_frames_flat_share": 1.0,
+  "dream_psnr_at": {
+   "4": 26.627016067504883,
+   "8": 22.409347534179688,
+   "16": 16.78237533569336,
+   "24": 15.579492568969727
+  },
+  "freeze_psnr_at": {
+   "4": 20.82578468322754,
+   "8": 18.055553436279297,
+   "16": 14.351339340209961,
+   "24": 14.254664421081543
+  },
+  "dream_psnr_mean": 20.673595428466797,
+  "freeze_psnr_mean": 16.91560935974121,
+  "dream_flat_share_at_end": 0.40625,
+  "real_flat_share_at_end": 0.171875,
+  "dream_flat_share_last8": 0.455078125,
+  "real_flat_share_last8": 0.138671875,
+  "device": "mps",
+  "script": "python eval_prereg.py --ckpt runs/w2_B_final_ema.pt --name w2_B --only-flat-escape --device mps"
+ }
 }

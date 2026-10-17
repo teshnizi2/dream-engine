@@ -3,12 +3,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { startServer } from './serve.mjs';
+import { startServer, rootFromArgs } from './serve.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// `--root <dir>` serves another folder that contains site/ (e.g. a scratch copy with a different model) instead of the repository
-const rootArg = process.argv.indexOf('--root');
-const srv = await startServer(path.resolve(rootArg > 0 ? process.argv[rootArg + 1] : path.join(here, '..')), 0);
+const srv = await startServer(rootFromArgs(path.join(here, '..')), 0);
 const browser = await puppeteer.launch({ executablePath: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', headless: 'new', args: ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--ignore-gpu-blocklist'] });
 const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  ' + detail : ''}`); };
@@ -25,9 +23,11 @@ try {
   const txt = (sel) => page.evaluate((s) => document.querySelector(s).textContent, sel);
   check('backend readout shows the active execution provider', /WebGPU|WASM/.test(await txt('#r-backend')), await txt('#r-backend'));
   check('model parameter count is shown', /\d+(\.\d+)?M/.test(await txt('#r-params')), await txt('#r-params'));
+  const caps = await page.evaluate(() => [...document.querySelectorAll('.keys .key')].map((e) => e.textContent.trim()).join(''));
+  check('key caps keep their letters', /^[QWEASD]{6}$/.test(caps) && new Set(caps).size === 6, caps);
   const K = await page.evaluate(async () => (await (await fetch('models/dream_meta.json')).json()).config?.num_ctx ?? 4);
-  const words = await page.evaluate(() => [...document.querySelectorAll('[data-k="word"]')].map((e) => e.textContent));
-  const nums = await page.evaluate(() => [...document.querySelectorAll('[data-k="num"]')].map((e) => e.textContent));
+  const words = await page.evaluate(() => [...document.querySelectorAll('[data-ctx="word"]')].map((e) => e.textContent));
+  const nums = await page.evaluate(() => [...document.querySelectorAll('[data-ctx="num"]')].map((e) => e.textContent));
   check('About names the context length of the loaded model', words.length === 3 && words.every((w) => w === ({ 4: 'four', 8: 'eight' }[K] || String(K))) && nums.every((n) => n === String(K)), `K = ${K}: ${words.join('/')} ${nums.join('/')}`);
   const t0 = await page.evaluate(() => window.__ticks || 0);
   const pose0 = await txt('#pose');

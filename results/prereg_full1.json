@@ -397,5 +397,30 @@
   "copy_last_psnr": 24.201534271240234,
   "n_windows": 256
  },
- "eval_wall_seconds": 112.52443051338196
+ "eval_wall_seconds": 112.52443051338196,
+ "flat_escape": {
+  "definition": "start on a flat-wall frame, 4 identical context frames, hold turn-right for 24 frames; exploratory, not pre-registered as decisive",
+  "episodes": 64,
+  "start_frames_flat_share": 1.0,
+  "dream_psnr_at": {
+   "4": 29.618467330932617,
+   "8": 24.384387969970703,
+   "16": 18.01373291015625,
+   "24": 16.392919540405273
+  },
+  "freeze_psnr_at": {
+   "4": 20.82578468322754,
+   "8": 18.055553436279297,
+   "16": 14.351339340209961,
+   "24": 14.254664421081543
+  },
+  "dream_psnr_mean": 22.331357955932617,
+  "freeze_psnr_mean": 16.91560935974121,
+  "dream_flat_share_at_end": 0.21875,
+  "real_flat_share_at_end": 0.171875,
+  "dream_flat_share_last8": 0.119140625,
+  "real_flat_share_last8": 0.138671875,
+  "device": "mps",
+  "script": "python eval_prereg.py --ckpt runs/full1_final_ema.pt --name full1 --only-flat-escape --device mps"
+ }
 }

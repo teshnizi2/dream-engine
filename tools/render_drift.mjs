@@ -5,10 +5,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { startServer } from './serve.mjs';
+import { startServer, rootFromArgs } from './serve.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+const root = rootFromArgs(path.resolve(here, '..'));
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) => { if (a.startsWith('--')) acc.push([a.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : 'true']); return acc; }, []));
 if (!args.eval) { console.error('usage: node tools/render_drift.mjs --eval results/eval_<name>.json [--out media/drift.png] [--scale 1]'); process.exit(2); }
 const rel = path.relative(root, path.resolve(args.eval));
