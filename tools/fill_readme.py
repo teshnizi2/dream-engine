@@ -186,6 +186,17 @@ def _v3_exploratory(res):
         out.append("**Exploratory: the learning curve of the collapse.** Collapse rate / median tracking horizon of the EMA checkpoints saved every 20k steps (same protocol, 64 episodes x 512 frames):\n\n"
                    + table(["training steps"] + [names[k] for k in kinds], rows)
                    + "\n\nThe collapse rate falls steadily with training in v2, so a 20k-step comparison understates what 150k steps do and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json`.")
+    su = []
+    for f in sorted(res.glob("signature_use_*.json"), key=lambda f: (_load_abs(f) or {}).get("step", 0)):
+        j = _load_abs(f)
+        if j and "psnr_drop_mean" in j:
+            su.append([f.stem.replace("signature_use_", ""), f"{j['step']:,}", f1(j["true_signature"]["dream_psnr_at"]["8"]), f1(j["shifted_signature"]["dream_psnr_at"]["8"]),
+                       f"{j['psnr_drop_at_8']:.2f}", f"{j['psnr_drop_mean']:.2f}"])
+    if su:
+        out.append("**Exploratory: does a v3 model read the signature?** The flat-wall escape test is run in the v3 game and in a copy whose tint is shifted (a different position code on the same geometry); "
+                   "a model that only copies colours scores the same in both, one that reads the code as a position is misled and loses PSNR:\n\n"
+                   + table(["checkpoint", "training steps", "PSNR @8, true signature", "PSNR @8, shifted signature", "drop @8, dB", "mean drop over 24 frames, dB"], su)
+                   + "\n\nSource: `results/signature_use_<run>.json` (`tools/signature_use.py`).")
     esc = []
     for label, path in (("w2_B (v2, 20k)", "prereg_w2_B.json"), ("v3k4 (v3, 20k)", "prereg_v3k4.json"), ("full1 (v2, 150k)", "prereg_full1.json"), ("full2 (v3, 150k)", "prereg_full2.json")):
         j = _load_abs(res / path)

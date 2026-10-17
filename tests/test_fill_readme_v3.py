@@ -84,3 +84,14 @@ def test_the_v3_section_adds_the_exploratory_tables_when_their_files_exist(tmp_p
 def test_a_median_between_two_integers_is_not_rounded_away():
     import fill_readme as F
     assert F.fmt_frames(15.5) == "15.5" and F.fmt_frames(14.0) == "14" and F.fmt_frames(13.25) == "13.2"
+
+
+def test_the_signature_reliance_table_lists_the_v3_checkpoints(tmp_path):
+    import fill_readme as F
+    populate(tmp_path, adopt=False)
+    for name, step, drop in (("v3k4", 20000, 0.38), ("full2_s60000", 60000, 0.23), ("full2", 150000, 0.9)):
+        (tmp_path / f"signature_use_{name}.json").write_text(json.dumps({
+            "step": step, "psnr_drop_mean": drop, "psnr_drop_at_8": drop, "psnr_drop_at_16": drop,
+            "true_signature": {"dream_psnr_at": {"8": 23.0, "16": 17.0}}, "shifted_signature": {"dream_psnr_at": {"8": 22.6, "16": 16.4}}}))
+    text = F.v3_section(tmp_path)
+    assert "signature" in text.lower() and "60,000" in text and "150,000" in text and "0.90" in text

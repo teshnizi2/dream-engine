@@ -1,0 +1,46 @@
+{
+ "script": "python tools/signature_use.py --ckpt /private/tmp/claude-501/-Users-teshnizi-Random-projects/dde2b447-a63a-4b03-bd23-7e8fad594ebf/scratchpad/dream/full2ck/ema_step20000.pt --name full2_s20000 --device mps",
+ "checkpoint": "/private/tmp/claude-501/-Users-teshnizi-Random-projects/dde2b447-a63a-4b03-bd23-7e8fad594ebf/scratchpad/dream/full2ck/ema_step20000.pt",
+ "step": 20000,
+ "num_ctx": 4,
+ "true_signature": {
+  "episodes": 64,
+  "dream_psnr_at": {
+   "4": 26.317874908447266,
+   "8": 22.2301025390625,
+   "16": 16.872425079345703,
+   "24": 15.042165756225586
+  },
+  "freeze_psnr_at": {
+   "4": 21.180294036865234,
+   "8": 18.450328826904297,
+   "16": 14.817222595214844,
+   "24": 14.486063957214355
+  },
+  "dream_psnr_mean": 20.520008087158203,
+  "dream_flat_share_at_end": 0.53125,
+  "real_flat_share_at_end": 0.171875
+ },
+ "shifted_signature": {
+  "episodes": 64,
+  "dream_psnr_at": {
+   "4": 26.23778533935547,
+   "8": 22.09066390991211,
+   "16": 16.7884521484375,
+   "24": 14.940605163574219
+  },
+  "freeze_psnr_at": {
+   "4": 21.12938690185547,
+   "8": 18.36724090576172,
+   "16": 14.68989372253418,
+   "24": 14.247424125671387
+  },
+  "dream_psnr_mean": 20.39126968383789,
+  "dream_flat_share_at_end": 0.5,
+  "real_flat_share_at_end": 0.171875
+ },
+ "psnr_drop_at_8": 0.13943862915039062,
+ "psnr_drop_at_16": 0.08397293090820312,
+ "psnr_drop_mean": 0.1287384033203125,
+ "definition": "flat-wall escape in the v3 game and in a copy with the tint phases shifted by [0.31, 0.47, 0.59]; each run is scored against its own game's real frames"
+}
