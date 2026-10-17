@@ -271,7 +271,9 @@ def main():
             "sigma_offset_noise": model.cfg.sigma_offset_noise,
             "ctx_sigma": a.ctx_sigma, "sampler_init": a.init, "default_steps": a.default_steps}
     (out / f"{a.name}_meta.json").write_text(json.dumps(meta, indent=1))
-    res = out if a.random_init else ROOT / "results"          # a random-weights export is a test fixture: keep it out of results/
+    # the export report is a result only for the shipped model files (site/models); any other output folder (a scratch site, a random-weights
+    # test fixture) keeps its report next to the files, so a dry run never overwrites the shipped model's numbers
+    res = ROOT / "results" if (not a.random_init and out.resolve() == (ROOT / "site" / "models").resolve()) else out
     res.mkdir(exist_ok=True)
     (res / f"onnx_export_{a.name}.json").write_text(json.dumps(report, indent=1))
     print(json.dumps({k: v for k, v in report.items() if k not in ("fp32", "fp16")}, indent=1))

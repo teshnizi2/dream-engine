@@ -110,8 +110,18 @@ def v3_section(res=None):
                "(window and thresholds were fixed on v2 rollouts, `docs/PREREG-v3.md` section 4). *Spin return*: PSNR between the start view and the view after a full 360 degree turn.")
     runs = abl["runs"]
     order = [abl["baseline"]] + [n for n in runs if n != abl["baseline"]]
+    pv = abl.get("paired_vs_baseline", {})
+
+    def abl_row(n):
+        r = row(runs[n], n + (" (baseline)" if n == abl["baseline"] else ""))
+        if n in pv:
+            lo, hi = pv[n]["collapse_ratio_ci95"]
+            r.append(f"{pv[n]['collapse_ratio']:.2f} ({lo:.2f} to {hi:.2f})")
+        else:
+            r.append("1" if n == abl["baseline"] else "")
+        return r
     out.append("**20k-step ablation** (same recipe as `w2_B`, one run each, 64 episodes x 512 frames):\n\n"
-               + table(head, [row(runs[n], n + (" (baseline)" if n == abl["baseline"] else "")) for n in order])
+               + table(head + ["collapse rate relative to the baseline (paired 95% interval)"], [abl_row(n) for n in order])
                + f"\n\nSelection rule (fixed in advance): {abl['selection']['reason']}.")
     if fin:
         new, ref = fin["new"], fin["ref"]

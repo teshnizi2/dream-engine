@@ -80,13 +80,23 @@ def real_flags_agree(bg_real_a, bg_real_b) -> float:
     return float((fw.flat_flags(bg_real_a) == fw.flat_flags(bg_real_b)).mean())
 
 
+def _paired(res, new: str, ref: str, rows: dict) -> dict:
+    """Collapse-rate ratio and median-horizon difference of `new` against `ref` with intervals that resample the episodes jointly."""
+    jn, jr = (json.loads((res / f"prereg_{n}.json").read_text()) for n in (new, ref))
+    ratio = rows[new]["collapse"] / rows[ref]["collapse"] if rows[ref]["collapse"] else float("nan")
+    return {"collapse_ratio": ratio, "collapse_ratio_ci95": list(paired_ratio_ci(jn["collapse"]["per_episode"], jr["collapse"]["per_episode"])),
+            "horizon_median_difference": rows[new]["horizon_median"] - rows[ref]["horizon_median"],
+            "horizon_median_difference_ci95": list(paired_median_diff_ci(jn["tracking_horizon_20db"]["per_episode"], jr["tracking_horizon_20db"]["per_episode"]))}
+
+
 def ablation(res, baseline: str, variants: list) -> dict:
     res = pathlib.Path(res)
     rows = {n: load_row(res, n) for n in [baseline, *variants]}
     sel = select_variant({n: rows[n] for n in variants}, rows[baseline])
     base_bg = np.load(res / f"prereg_{baseline}.npz")["bg_real"]
     pairing = {n: real_flags_agree(np.load(res / f"prereg_{n}.npz")["bg_real"], base_bg) for n in variants}
-    return {"baseline": baseline, "runs": rows, "selection": sel, "pairing_check_real_flat_flags_agree": pairing}
+    return {"baseline": baseline, "runs": rows, "selection": sel, "pairing_check_real_flat_flags_agree": pairing,
+            "paired_vs_baseline": {n: _paired(res, n, baseline, rows) for n in variants}}
 
 
 def final(res, new: str, ref: str) -> dict:
