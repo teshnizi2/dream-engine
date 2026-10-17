@@ -216,6 +216,7 @@ def main():
     ap.add_argument("--random-init", action="store_true", help="export random weights (speed benchmarks only)")
     ap.add_argument("--channels", default="32,64,96,128")
     ap.add_argument("--depths", default="2,2,2,2")
+    ap.add_argument("--num-ctx", type=int, default=4, help="context frames of a --random-init model (checkpoints carry their own)")
     ap.add_argument("--game", default=None, help="game spec json for the test vectors (default: the one the checkpoint was trained on)")
     ap.add_argument("--out", default="site/models")
     ap.add_argument("--name", default="dream")
@@ -231,7 +232,7 @@ def main():
         torch.manual_seed(0)
         cfg = DenoiserConfig(channels=tuple(int(c) for c in a.channels.split(",")),
                              depths=tuple(int(c) for c in a.depths.split(",")),
-                             attn=tuple(False for _ in a.channels.split(",")))
+                             attn=tuple(False for _ in a.channels.split(",")), num_ctx=a.num_ctx)
         model, step = Denoiser(cfg).eval(), -1
     else:
         model, step = load_ema(a.ckpt)
@@ -270,7 +271,7 @@ def main():
             "sigma_offset_noise": model.cfg.sigma_offset_noise,
             "ctx_sigma": a.ctx_sigma, "sampler_init": a.init, "default_steps": a.default_steps}
     (out / f"{a.name}_meta.json").write_text(json.dumps(meta, indent=1))
-    res = ROOT / "results"
+    res = out if a.random_init else ROOT / "results"          # a random-weights export is a test fixture: keep it out of results/
     res.mkdir(exist_ok=True)
     (res / f"onnx_export_{a.name}.json").write_text(json.dumps(report, indent=1))
     print(json.dumps({k: v for k, v in report.items() if k not in ("fp32", "fp16")}, indent=1))

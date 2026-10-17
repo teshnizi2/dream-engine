@@ -10,6 +10,7 @@ try {
   const blob = new Float32Array(await (await fetch(base + 'testvec.bin')).arrayBuffer());
   const vecs = []; let off = 0;
   for (const c of idx) { const parts = []; for (const s of c.sizes) { parts.push(blob.subarray(off, off + s)); off += s; } vecs.push({ ...c, x: parts[0], ctx: parts[1], act: parts[2], out: parts[3] }); }
+  const K = vecs[0].ctx.length / (3 * 64 * 64);           // context frames of the model that wrote the test vectors (v2: 4)
   for (const cfg of JSON.parse(q.get('configs'))) {      // [{model:'dream_fp16', ep:'webgpu', capture:true}, ...]
     const r = { ...cfg };
     try {
@@ -25,7 +26,7 @@ try {
         if (cfg.capture) {
           if (!gpu) {
             const mk = (arr, dims) => { const buf = device.createBuffer({ size: Math.ceil(arr.byteLength / 16) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }); return { buf, t: ort.Tensor.fromGpuBuffer(buf, { dataType: 'float32', dims }) }; };
-            gpu = { x: mk(v.x, [1, 3, 64, 64]), sigma: mk(new Float32Array(1), [1]), ctx: mk(v.ctx, [1, 12, 64, 64]), act: mk(v.act, [1, 4, 9]), cs: mk(new Float32Array(1), [1]) };
+            gpu = { x: mk(v.x, [1, 3, 64, 64]), sigma: mk(new Float32Array(1), [1]), ctx: mk(v.ctx, [1, 3 * K, 64, 64]), act: mk(v.act, [1, K, 9]), cs: mk(new Float32Array(1), [1]) };
           }
           device.queue.writeBuffer(gpu.x.buf, 0, v.x); device.queue.writeBuffer(gpu.ctx.buf, 0, v.ctx); device.queue.writeBuffer(gpu.act.buf, 0, v.act);
           device.queue.writeBuffer(gpu.sigma.buf, 0, new Float32Array([v.sigma])); device.queue.writeBuffer(gpu.cs.buf, 0, new Float32Array([v.ctx_sigma]));
@@ -33,7 +34,7 @@ try {
           if (!r.warm) { await (await sess.run(feeds)).denoised.getData(); r.warm = true; }   // capture run
           out = await (await sess.run(feeds)).denoised.getData();
         } else {
-          const feeds = { x: new ort.Tensor('float32', v.x, [1, 3, 64, 64]), sigma: new ort.Tensor('float32', [v.sigma], [1]), ctx: new ort.Tensor('float32', v.ctx, [1, 12, 64, 64]), act: new ort.Tensor('float32', v.act, [1, 4, 9]), ctx_sigma: new ort.Tensor('float32', [v.ctx_sigma], [1]) };
+          const feeds = { x: new ort.Tensor('float32', v.x, [1, 3, 64, 64]), sigma: new ort.Tensor('float32', [v.sigma], [1]), ctx: new ort.Tensor('float32', v.ctx, [1, 3 * K, 64, 64]), act: new ort.Tensor('float32', v.act, [1, K, 9]), ctx_sigma: new ort.Tensor('float32', [v.ctx_sigma], [1]) };
           out = (await sess.run(feeds)).denoised.data;
         }
         let m = 0, s = 0; for (let i = 0; i < out.length; i++) { const d = Math.abs(out[i] - v.out[i]); if (d > m) m = d; s += d; }

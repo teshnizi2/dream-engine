@@ -84,7 +84,9 @@ def ablation(res, baseline: str, variants: list) -> dict:
     res = pathlib.Path(res)
     rows = {n: load_row(res, n) for n in [baseline, *variants]}
     sel = select_variant({n: rows[n] for n in variants}, rows[baseline])
-    return {"baseline": baseline, "runs": rows, "selection": sel}
+    base_bg = np.load(res / f"prereg_{baseline}.npz")["bg_real"]
+    pairing = {n: real_flags_agree(np.load(res / f"prereg_{n}.npz")["bg_real"], base_bg) for n in variants}
+    return {"baseline": baseline, "runs": rows, "selection": sel, "pairing_check_real_flat_flags_agree": pairing}
 
 
 def final(res, new: str, ref: str) -> dict:

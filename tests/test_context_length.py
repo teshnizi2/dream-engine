@@ -211,3 +211,19 @@ def test_a_final_checkpoint_without_args_takes_the_game_from_the_resume_checkpoi
     assert ex.ckpt_game(str(tmp_path / "final_ema.pt")) == "game/spec_v2.json"          # nothing recorded anywhere: the v2 game
     torch.save({"ema": {}, "config": cfg, "step": 5, "args": {"game": "game/spec_v3.json"}}, tmp_path / "ckpt_last.pt")
     assert ex.ckpt_game(str(tmp_path / "final_ema.pt")) == "game/spec_v3.json"
+
+
+def test_export_cli_can_write_a_random_8_context_model_for_browser_tests(tmp_path):
+    """`export.py --random-init --num-ctx 8`: a model of the right interface without training, to test the browser pipeline for K = 8."""
+    report = ROOT / "results" / "onnx_export_dream.json"                    # the real model's export report must not be touched
+    before = report.read_text() if report.exists() else None
+    r = subprocess.run([sys.executable, str(ROOT / "export.py"), "--random-init", "--num-ctx", "8", "--channels", "16,16,16,16", "--depths", "1,1,1,1",
+                        "--out", str(tmp_path), "--name", "dream"], cwd=ROOT, capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert (report.read_text() if report.exists() else None) == before
+    assert (tmp_path / "onnx_export_dream.json").exists()
+    meta = json.loads((tmp_path / "dream_meta.json").read_text())
+    assert meta["config"]["num_ctx"] == 8
+    g = onnx.load(str(tmp_path / "dream_fp32.onnx"))
+    ins = {i.name: [d.dim_value for d in i.type.tensor_type.shape.dim] for i in g.graph.input}
+    assert ins["ctx"] == [1, 24, 64, 64] and ins["act"] == [1, 8, 9]

@@ -115,6 +115,7 @@ def test_compare_runs_on_saved_evaluations_applies_both_rules(tmp_path):
     out = C.ablation(tmp_path, baseline="w2_B", variants=["v2k8", "v3k4", "v3k8"])
     assert out["selection"]["winner"] == "v3k4"                       # v3k8 collapses least but its horizon is shorter than the baseline's
     assert set(out["runs"]) == {"w2_B", "v2k8", "v3k4", "v3k8"} and out["runs"]["v3k4"]["K"] == 4 and out["runs"]["v3k4"]["game"] == "v3"
+    assert out["pairing_check_real_flat_flags_agree"] == {"v2k8": 1.0, "v3k4": 1.0, "v3k8": 1.0}      # every run saw the same real frames
     fake_eval(tmp_path, "full1", 4, "v2", horizon_drop=16, collapse_from=60)
     fake_eval(tmp_path, "full2", 4, "v3", horizon_drop=20, collapse_from=400)
     fin = C.final(tmp_path, "full2", "full1")

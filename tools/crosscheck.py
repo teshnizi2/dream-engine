@@ -13,7 +13,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from data.loader import TrajectorySource  # noqa: E402
-from export import load_ema  # noqa: E402
+from export import ckpt_game, load_ema  # noqa: E402
 from game import raycaster as rc  # noqa: E402
 from model import evaluate as ev  # noqa: E402
 
@@ -23,14 +23,16 @@ ap.add_argument("--ctx-sigma", type=float, default=0.05)
 ap.add_argument("--init", default="unit")
 ap.add_argument("--n", type=int, default=64)
 a = ap.parse_args()
-w = rc.World()
-b = TrajectorySource(w, a.n, 5, seed=999).next_batch()
+model, step = load_ema(a.ckpt)
+K = model.cfg.num_ctx
+game = ckpt_game(a.ckpt)
+w = rc.World(rc.load_spec(game))
+b = TrajectorySource(w, a.n, K + 1, seed=999).next_batch()
 wins = [{"pose": b["poses"][i, 0].tolist(), "actions": b["actions"][i].tolist()} for i in range(a.n)]
 tmp = pathlib.Path(tempfile.mkdtemp()) / "wins.json"
 tmp.write_text(json.dumps(wins))
 val = {"frames": ev._to_unit(b["frames"]), "actions": torch.from_numpy(b["actions"])}
-model, step = load_ema(a.ckpt)
-out = {"script": "tools/crosscheck.py " + " ".join(sys.argv[1:]), "checkpoint_step": step, "windows": a.n,
+out = {"script": "tools/crosscheck.py " + " ".join(sys.argv[1:]), "checkpoint_step": step, "windows": a.n, "num_ctx": K, "game": game,
        "ctx_sigma": a.ctx_sigma, "init": a.init, "python": {}, "browser": {}}
 copy = ev.one_step_metrics(lambda x, s, c, ac, sc: c[:, -1], val, steps=1, ctx_sigma=0.0)
 out["copy_last_frame_psnr"] = copy["psnr"]

@@ -1,4 +1,4 @@
-"""media/sampler_steps.png: the same 4 real context frames + actions, the next frame predicted with 1, 2 and 3 Euler steps
+"""media/sampler_steps.png: the same K real context frames + actions, the next frame predicted with 1, 2 and 3 Euler steps
 (demo sampler: `unit` start, context noise 0.05), next to the true next frame. Windows are evenly spaced picks from the
 256 fixed validation windows of eval.py (not chosen by quality). Per-window PSNR goes to results/sampler_figure.json.
 
@@ -14,7 +14,7 @@ import torch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from export import load_ema  # noqa: E402
+from export import ckpt_game, load_ema  # noqa: E402
 from game import raycaster as rc  # noqa: E402
 from model import evaluate as ev  # noqa: E402
 from model import metrics  # noqa: E402
@@ -39,7 +39,8 @@ def main():
     dev = torch.device(a.device)
     model, step = load_ema(a.ckpt)
     model = model.to(dev).eval()
-    val = ev.val_windows(rc.World(), n=256, seed=999)
+    K = model.cfg.num_ctx
+    val = ev.val_windows(rc.World(rc.load_spec(ckpt_game(a.ckpt))), n=256, seed=999, K=K)
     idx = np.linspace(0, 255, a.n).astype(int)
     win = {k: v[idx].to(dev) for k, v in val.items()}
     preds, psnr = {}, {}
@@ -47,8 +48,8 @@ def main():
         torch.manual_seed(0)
         r = ev.one_step_metrics(model.denoise, win, steps=steps, ctx_sigma=a.ctx_sigma, init=a.init, return_pred=True)
         preds[steps], psnr[steps] = r["pred"], r["psnr_per_window"]
-    ctx_last = win["frames"][:, 3].cpu()
-    target = win["frames"][:, 4].cpu()
+    ctx_last = win["frames"][:, K - 1].cpu()
+    target = win["frames"][:, K].cpu()
 
     from PIL import Image, ImageDraw, ImageFont
     tile, gap, left, top, pad = 192, 8, 24, 62, 22

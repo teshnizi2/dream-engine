@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildSigmas, Rng, rgbToChw, psnr, N, PIX } from '../site/js/util.mjs';
+import { buildSigmas, Rng, rgbToChw, psnr, N, PIX, K, setContextLength } from '../site/js/util.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(fs.readFileSync(path.join(here, 'fixtures/parity.json'), 'utf8'));
@@ -69,4 +69,12 @@ test('quantiseFrame clamps to [-1, 1], rounds to the 8-bit grid and writes both 
   assert.equal(rgb[1], Math.floor((0.5 + 1) * 127.5 + 0.5));      // green of pixel 0 (HWC order)
   assert.equal(chw[0], 1); assert.equal(chw[1], -1);
   assert.ok(Math.abs(chw[PIX] - (rgb[1] / 127.5 - 1)) < 1e-7);
+});
+
+test('context length is 4 (v2) until the model meta says otherwise, and the exported binding follows', () => {
+  assert.equal(K, 4);
+  setContextLength(8);
+  assert.equal(K, 8);                       // an ES module export is a live binding: every importer sees the new value
+  setContextLength(4);
+  assert.equal(K, 4);
 });

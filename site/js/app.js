@@ -1,6 +1,6 @@
 // Dream Engine: REAL (JS raycaster) next to DREAM (diffusion model in onnxruntime-web), same keypresses.
 import { World, stateFromSpecStart } from './game.mjs';
-import { Dream, Rng, rgbToChw, psnr, N, PIX, K } from './dream.mjs';
+import { Dream, Rng, rgbToChw, psnr, N, PIX, K, setContextLength } from './dream.mjs';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -283,6 +283,9 @@ async function boot() {
   try {
     spec = await (await fetch('js/spec.json')).json();
     try { meta = await (await fetch('models/dream_meta.json')).json(); } catch (e) { meta = {}; }
+    setContextLength(meta.config?.num_ctx ?? 4);                  // the model's context length (v2: 4); everything below reads K
+    const WORDS = { 4: 'four', 8: 'eight' };
+    document.querySelectorAll('[data-k]').forEach((el) => { el.textContent = el.dataset.k === 'word' ? (WORDS[K] || String(K)) : String(K); });
     try { tour = (await (await fetch('js/tour.json')).json()).actions; } catch (e) { tour = []; }
     try {
       const ev = await (await fetch('models/eval_summary.json')).json();
@@ -368,11 +371,11 @@ function installCapture() {
         let st = { x: w.pose[0], y: w.pose[1], dx: w.pose[2], dy: w.pose[3] };
         const fr = [], ac = [];
         world.render(st, rgb); fr.push(rgbToChw(rgb)); ac.push([0, 0, 0]);
-        for (let k = 0; k < 3; k++) { st = world.step(st, w.actions[k]); world.render(st, rgb); fr.push(rgbToChw(rgb)); ac.push(w.actions[k]); }
+        for (let k = 0; k < K - 1; k++) { st = world.step(st, w.actions[k]); world.render(st, rgb); fr.push(rgbToChw(rgb)); ac.push(w.actions[k]); }
         last.set(rgb);
-        st = world.step(st, w.actions[3]); world.render(st, tgt);
+        st = world.step(st, w.actions[K - 1]); world.render(st, tgt);
         dream.reset(fr, ac);
-        const out = await dream.step(w.actions[3]);
+        const out = await dream.step(w.actions[K - 1]);
         sd += Math.min(100, psnr(out.rgb, tgt)); sc += Math.min(100, psnr(last, tgt));
       }
       return { n: wins.length, dream_psnr: sd / wins.length, copy_last_psnr: sc / wins.length, steps, ctx_sigma: dream.ctxSigma, backend: dream.info.backend };

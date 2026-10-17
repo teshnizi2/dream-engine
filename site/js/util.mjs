@@ -2,7 +2,9 @@
 export const SIZE = 64;
 export const PIX = SIZE * SIZE;
 export const N = 3 * PIX;
-export const K = 4;
+// Context frames (and actions) the model takes: 4 for v2. A live export: the page sets it from the model meta before anything is allocated.
+export let K = 4;
+export function setContextLength(k) { K = k; }
 
 export function buildSigmas(steps, smin = 2e-3, smax = 5, rho = 7) {
   const a = Math.pow(smax, 1 / rho), b = Math.pow(smin, 1 / rho);

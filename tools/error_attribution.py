@@ -13,7 +13,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from data.loader import TrajectorySource  # noqa: E402
-from export import load_ema  # noqa: E402
+from export import ckpt_game, load_ema  # noqa: E402
 from game import raycaster as rc  # noqa: E402
 from model import evaluate as ev  # noqa: E402
 from model.denoiser import encode_actions  # noqa: E402
@@ -26,16 +26,17 @@ ap.add_argument("--out", required=True)
 ap.add_argument("--n", type=int, default=256)
 a = ap.parse_args()
 torch.set_num_threads(4)
-w = rc.World()
-b = TrajectorySource(w, a.n, 5, seed=999).next_batch()
 model, step = load_ema(a.ckpt)
+K = model.cfg.num_ctx
+w = rc.World(rc.load_spec(ckpt_game(a.ckpt)))
+b = TrajectorySource(w, a.n, K + 1, seed=999).next_batch()
 fr = ev._to_unit(b["frames"])
 ac = torch.from_numpy(b["actions"])
-ctx, tgt = fr[:, :4], fr[:, 4]
+ctx, tgt = fr[:, :K], fr[:, K]
 with torch.no_grad():
-    pred = sample_next(model.denoise, ctx, encode_actions(ac[:, :4]), torch.zeros(a.n), build_sigmas(1), quantize=True)
+    pred = sample_next(model.denoise, ctx, encode_actions(ac[:, :K]), torch.zeros(a.n), build_sigmas(1), quantize=True)
 err = ((pred - tgt) / 2) ** 2
-st = rc.State(*[b["poses"][:, 4, i] for i in range(4)])
+st = rc.State(*[b["poses"][:, K, i] for i in range(4)])
 perp, side, wid, u = w.cast(st, w.camx)
 lineh = 64 / perp
 top, bot = 32 - lineh * 0.5, 32 + lineh * 0.5

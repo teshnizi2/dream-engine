@@ -1,20 +1,21 @@
 // The neural game engine: an onnxruntime-web session plus the EDM sampler. There is no game code in here:
-// given the last 4 frames and the last 4 actions it imagines the next frame, then feeds it back in.
+// given the last K frames and the last K actions (K = 4 in v2, read from the model meta) it imagines the next frame, then feeds it back in.
 //
 //   frame ~ D(x; sigma | context frames, actions)   (3 Euler steps by default, sigmas from the Karras schedule)
 //
-// The ONNX graph (export.py) has static shapes (batch 1): x [1,3,64,64], sigma [1], ctx [1,12,64,64],
-// act [1,4,9] (one-hot), ctx_sigma [1] -> denoised [1,3,64,64].
+// The ONNX graph (export.py) has static shapes (batch 1): x [1,3,64,64], sigma [1], ctx [1,3K,64,64],
+// act [1,K,9] (one-hot), ctx_sigma [1] -> denoised [1,3,64,64].
 
 import * as ort from 'onnxruntime-web';
-import { SIZE, PIX, N, K, buildSigmas, Rng, eulerSample, quantiseFrame } from './util.mjs';
-export { SIZE, PIX, N, K, buildSigmas, Rng, rgbToChw, psnr, eulerSample, quantiseFrame } from './util.mjs';
+import { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, eulerSample, quantiseFrame } from './util.mjs';
+export { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, rgbToChw, psnr, eulerSample, quantiseFrame } from './util.mjs';
 
 const POOL = 1 << 20;
 
 export class Dream {
   static async create({ modelBytes, meta = {}, backend = 'auto', capture = true, seed = 1234, onStatus = () => {} }) {
     const d = new Dream();
+    setContextLength(meta.config?.num_ctx ?? 4);          // the graph's context length (v2: 4); must be set before the buffers below
     d.rng = new Rng(seed);
     d.meta = meta;
     d.pool = new Float32Array(POOL);
