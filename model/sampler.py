@@ -23,6 +23,15 @@ def quantize_unit(x: Tensor) -> Tensor:
     return x.clamp(-1, 1).add(1).div(2).mul(255).round().div(255).mul(2).sub(1)
 
 
+def randn_with(shape, generator: Optional[torch.Generator], device, dtype) -> Tensor:
+    """N(0,1) noise from `generator`. A CPU generator cannot drive device tensors on MPS (torch raises), so its noise is drawn
+    on the CPU and moved: the same seed gives the same noise on every device."""
+    device = torch.device(device)
+    if generator is not None and generator.device.type != device.type:
+        return torch.randn(shape, generator=generator, dtype=dtype).to(device)
+    return torch.randn(shape, generator=generator, device=device, dtype=dtype)
+
+
 @torch.no_grad()
 def sample_next(denoise: DenoiseFn, ctx: Tensor, act: Optional[Tensor], s_c: Tensor, sigmas: Tensor,
                 order: int = 1, quantize: bool = True, generator: Optional[torch.Generator] = None,
@@ -31,7 +40,7 @@ def sample_next(denoise: DenoiseFn, ctx: Tensor, act: Optional[Tensor], s_c: Ten
     order 1 = Euler (one model call per step), order 2 = Heun (an extra call on every step except the last).
     init: 'edm' starts from sigma_max * N(0, I) (Karras); 'unit' from N(0, I) as in the DIAMOND code."""
     B, _, C, H, W = ctx.shape
-    x = torch.randn(B, C, H, W, generator=generator, device=ctx.device, dtype=ctx.dtype)
+    x = randn_with((B, C, H, W), generator, ctx.device, ctx.dtype)
     if init == "edm":
         x = x * sigmas[0]
     for i in range(len(sigmas) - 1):
@@ -67,7 +76,7 @@ def rollout(denoise: DenoiseFn, init_frames: Tensor, actions: Tensor, steps: int
     for t in range(T):
         c = ctx
         if ctx_sigma > 0:
-            c = c + torch.randn(c.shape, generator=generator, device=c.device, dtype=c.dtype) * ctx_sigma
+            c = c + randn_with(c.shape, generator, c.device, c.dtype) * ctx_sigma
         nxt = sample_next(denoise, c, ohe[:, t:t + K], s_c, sigmas, order=order,
                           quantize=quantize, generator=generator, init=init)
         if not clamp_unit:

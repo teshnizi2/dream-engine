@@ -14,7 +14,7 @@ imagining every frame from the same keypresses, with no game code.
 
 * **@@PARAMS_M@@M parameters**, trained for **@@MAIN_STEPS@@ steps (@@MAIN_HOURS@@ A100-hours)**; **@@FPS2@@ frames per second** in a browser tab with the default 2 denoising steps (WebGPU, fp16, Apple M4 shared with other jobs; best window @@FPS2_BEST@@).
 * One step ahead it is **@@ONE_STEP_PSNR@@ dB** (copy-the-last-frame gets @@COPY_PSNR@@ dB). Left to dream, it **tracks the real game for about @@TRACK20@@ frames** (PSNR above 20 dB), then wanders into a different, still game-like place: **@@ROLL_PSNR_32@@ dB after 32 frames, @@ROLL_PSNR_128@@ dB after 128** (an unrelated frame scores @@FLOOR_PSNR@@ dB).
-* All eight controls (move, strafe, turn and the arcs) beat "freeze the last frame". A full 360 degree spin does **not** return to the starting view (@@SPIN_BACK@@ dB): no map memory.
+* @@CONTROLS@@ A full 360 degree spin does **not** return to the starting view (@@SPIN_BACK@@ dB): no map memory.
 * The biggest lesson: the bottleneck was the game, not the network (see "What was tried").
 
 ## What it is

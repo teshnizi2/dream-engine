@@ -42,9 +42,12 @@ def ablation_tables():
             e1 = r["one_step_samplers_ctx0.1"]["euler1"]
             rows.append([label, f"{r['params'] / 1e6:.2f}M", f1(e1["psnr"]), f"{e1['ssim']:.3f}", f1(roll(r)["psnr_at"]["32"]), f1(r["baseline_copy_last_frame"]["psnr"])])
     if rows:
+        vals = [float(r[2]) for r in rows]
+        spread = max(vals) - min(vals)
+        verdict = ("width, depth and context noise were not the bottleneck." if spread <= 0.5 else "so the choice mattered at this scale.")
         parts.append("#### Architecture and context noise (game v1, 20k steps each)\n\n"
                      + table(["variant", "params", "1-step PSNR dB", "SSIM", "rollout PSNR @32 frames", "copy-last baseline"], rows)
-                     + "\n\nAll four land within 0.4 dB: width, depth and context noise were not the bottleneck.")
+                     + f"\n\nThe {len(rows)} variants span {spread:.1f} dB in 1-step PSNR: {verdict}")
     v1, v2 = ev("abl_B"), ev("w2_B")
     at1, at2 = load("results/error_attribution_abl_B_game_v1.json"), load("results/error_attribution_w2_B.json")
     if v1 and v2 and at1 and at2:
@@ -54,7 +57,7 @@ def ablation_tables():
         parts.append("#### The game, not the network, was the ceiling\n\n"
                      + table(["game version (same model and recipe, 20k steps)", "1-step PSNR dB", "copy-last baseline dB", "share of squared error on window-pane pixels"], rows)
                      + f"\n\nWindow stripes were {w1['pixel_share_pct']:.0f}% of the pixels but {w1['error_share_pct']:.0f}% of the model's squared error; redesigning them (3 panes per wall, fading to their mean colour with distance) cut that share to {w2['error_share_pct']:.0f}%. Source: `results/error_attribution_*.json` (`tools/error_attribution.py`).")
-    rows = []
+    rows, vals = [], {}
     for n, label in (("w3_ft_plain", "plain fine-tune (control)"), ("w3_ft_unroll3", "DIAMOND-style unroll 3"), ("w3_ft_blur", "context blur augmentation"),
                      ("w3_ft_rollout3", "scheduled sampling, 3 own frames, p 0.5")):
         r = ev(n)
@@ -63,12 +66,27 @@ def ablation_tables():
             ro = roll(r)
             m32 = sum(ro["psnr_curve"][:32]) / 32
             v = r["validity_nearest_real_frame_psnr"]
+            p1 = r["one_step_samplers_ctx0.1"]["euler1"]["psnr"]
             sharp = (roll(r2).get("sharpness_ratio_last32") if r2 else ro.get("sharpness_ratio_last32"))
-            rows.append([label, f1(r["one_step_samplers_ctx0.1"]["euler1"]["psnr"]), f1(m32), f1(v["dream_mean"]) + f" ({f1(v['real_mean'])})", f"{sharp:.2f}" if sharp is not None else "n/a"])
+            vals[n] = {"label": label, "m32": m32, "p1": p1, "valid": v["dream_mean"], "real": v["real_mean"], "sharp": sharp}
+            rows.append([label, f1(p1), f1(m32), f1(v["dream_mean"]) + f" ({f1(v['real_mean'])})", f"{sharp:.2f}" if sharp is not None else "n/a"])
     if rows:
+        verdict = ""
+        base = vals.get("w3_ft_plain")
+        if base:
+            others = {k: x for k, x in vals.items() if k != "w3_ft_plain"}
+            better = [x["label"] for x in others.values() if x["m32"] - base["m32"] > 0.4]
+            verdict = ("\n\nChange in the mean PSNR over the first 32 frames against the plain control: "
+                       + ", ".join(f"{x['label']} {x['m32'] - base['m32']:+.1f} dB" for x in others.values()) + ". "
+                       + ("None of them beats the control by more than the run-to-run noise (about 0.4 dB: the plain control itself moved the means by that much)."
+                          if not better else f"Beyond the noise (about 0.4 dB): {', '.join(better)}.")
+                       + (f" Context blur: nearest-real-frame PSNR {vals['w3_ft_blur']['valid']:.1f} dB against {base['valid']:.1f} for the control (true frames: {base['real']:.1f})."
+                          if "w3_ft_blur" in vals else "")
+                       + (f" Scheduled sampling changes the 1-step PSNR by {vals['w3_ft_rollout3']['p1'] - base['p1']:+.1f} dB."
+                          if "w3_ft_rollout3" in vals else ""))
         parts.append("#### Can training fix drift? (4k-step fine-tunes of the 20k-step model, game v2)\n\n"
                      + table(["fine-tune", "1-step PSNR dB", "mean PSNR over the first 32 rollout frames", "nearest-real-frame PSNR (real frames)", "late-frame sharpness vs real"], rows)
-                     + "\n\nNone improved how long the dream tracks the real game (run-to-run noise is about 0.4 dB). Context blur reduced the collapse onto flat wall views; scheduled sampling sharpened late frames but made them blobby and cost 3 dB.")
+                     + verdict)
     return "\n\n".join(parts)
 
 
@@ -101,6 +119,18 @@ def build(a):
     tok["ROLL_PSNR_128"] = f"{ro0['psnr_at']['128']:.1f}"
     tok["FLOOR_PSNR"] = f"{ev['baseline_unrelated_frame_psnr']:.1f}"
     tok["SPIN_BACK"] = f"{ev['spin_360']['dream_frame72_vs_start_view_psnr']:.1f}" if "spin_360" in ev else "n/a"
+    hk = ev.get("hold_one_key", {})
+    if hk:
+        beat = [k for k, d in hk.items() if d["dream_psnr_at"]["8"] > d["freeze_psnr_at"]["8"]]
+        weak = min(hk, key=lambda k: hk[k]["dream_psnr_at"]["8"] - hk[k]["freeze_psnr_at"]["8"])
+        if len(beat) == len(hk):
+            tok["CONTROLS"] = (f"All {len(hk)} hold-one-key tests (move, strafe, turn and the arcs) beat \"freeze the last frame\" after 8 frames; "
+                               f"the weakest margin is {weak.replace('_', ' ')}.")
+        else:
+            miss = ", ".join(k.replace("_", " ") for k in hk if k not in beat)
+            tok["CONTROLS"] = f"{len(beat)} of {len(hk)} hold-one-key tests beat \"freeze the last frame\" after 8 frames (not: {miss})."
+        tok["CONTROLS_NOTE"] = (f"Every key beats freezing at 8 frames; the smallest margin is {weak.replace('_', ' ')}." if len(beat) == len(hk)
+                                else f"Not every key beats freezing at 8 frames ({miss}).")
     if fps:
         tok["FPS2"] = f"{fps['summary']['2']['fps_counted_median']:.0f}"
         tok["FPS2_BEST"] = f"{fps['summary']['2']['fps_counted_best']:.0f}"
@@ -135,8 +165,12 @@ def build(a):
     cfg = ro.get("config") or {"steps": 3, "init": "edm", "ctx_sigma": ev.get("chosen_ctx_sigma")}
     extra = []
     if "frames_until_psnr_below_20db" in ro:
-        extra.append(f"* the mean PSNR falls below 20 dB after **{ro['frames_until_psnr_below_20db']} frames** (below 25 dB after {ro['frames_until_psnr_below_25db']}); "
-                     f"frames 129-{ro['horizon']} are as unlike the real game as an unrelated frame")
+        late = ""
+        if ro["horizon"] > 128 and "psnr_curve" in ro:
+            tail = ro["psnr_curve"][128:]
+            late = (f"; frames 129-{ro['horizon']} average {sum(tail) / len(tail):.1f} dB, close to the {ev['baseline_unrelated_frame_psnr']:.1f} dB "
+                    "of an unrelated frame (so past that point it is a different place, not a worse copy)")
+        extra.append(f"* the mean PSNR falls below 20 dB after **{ro['frames_until_psnr_below_20db']} frames** (below 25 dB after {ro['frames_until_psnr_below_25db']})" + late)
     if "sharpness_ratio_last32" in ro:
         extra.append(f"* late frames keep **{100 * ro['sharpness_ratio_last32']:.0f}%** of the real frames' edge sharpness (mean gradient magnitude, last 32 frames; 100% = as sharp as the real game)")
     if "spin_360" in ev:
@@ -146,8 +180,10 @@ def build(a):
     sections.append("### Drift: pure imagination against the true game\n\n"
                     f"Rollouts of {ro['horizon']} frames from 4 real frames, {ro['episodes']} episodes (exploration-policy actions), "
                     f"Euler {cfg['steps']} step(s), init `{cfg['init']}`, context noise {cfg['ctx_sigma']}. An unrelated frame scores about "
-                    f"{ev['baseline_unrelated_frame_psnr']:.1f} dB, so the dream follows the real game for roughly the first "
-                    "8-16 frames (a quarter to half a second) and then wanders to a different place.\n\n"
+                    f"{ev['baseline_unrelated_frame_psnr']:.1f} dB. "
+                    + (f"The mean PSNR falls below 20 dB at frame {ro['frames_until_psnr_below_20db']} "
+                       f"({ro['frames_until_psnr_below_20db'] / 30:.1f} s at the demo's 30 game ticks per second); after that the dream wanders to a different place."
+                       if "frames_until_psnr_below_20db" in ro else "") + "\n\n"
                     + table(["frames since wake-up"] + ks, rows) + "\n\n" + "\n".join(extra) + "\n\n![drift](media/drift.png)")
     if "validity_nearest_real_frame_psnr" in ev:
         v = ev["validity_nearest_real_frame_psnr"]
@@ -164,8 +200,8 @@ def build(a):
                          f1(d["dream_psnr_at"]["24"]), f1(d["freeze_psnr_at"]["24"])])
         sections.append("### Do the controls work? (hold one key for 24 frames from random poses)\n\n"
                         + table(["key", "dream @8 frames", "freeze @8", "dream @24", "freeze @24"], rows)
-                        + "\n\nPSNR dB against the real game; \"freeze\" repeats the last real frame. Every control beats freezing; "
-                        "strafing is the weakest (it is the rarest action in the training data).")
+                        + "\n\nPSNR dB against the real game; \"freeze\" repeats the last real frame. " + tok.get("CONTROLS_NOTE", "")
+                        + " Strafing is the rarest action in the training data.")
     if probe:
         best = max(probe["grid"], key=lambda r: r["mean_psnr_32"])
         worst = min(probe["grid"], key=lambda r: r["mean_psnr_32"])

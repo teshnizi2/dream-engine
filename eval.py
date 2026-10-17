@@ -28,8 +28,6 @@ from model import evaluate as ev  # noqa: E402
 from model import metrics  # noqa: E402
 from export import load_ema  # noqa: E402
 
-TOKENS = {"bg": "#0e1117", "panel": "#151a23", "line": "#2e3a52", "text": "#e8ecf5", "muted": "#8893ab", "amber": "#f59e0b"}
-
 
 def pick_device(name):
     if name != "auto":
@@ -142,48 +140,23 @@ def uncorrelated_floor(traj, horizon, K=4):
     return p.mean(0).numpy()
 
 
-def save_drift_figure(path, curves, floor, frozen, nn_dream=None, nn_real=None, horizon_marks=(32, 128, 512)):
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    t = TOKENS
-    fig, axes = plt.subplots(2 if nn_dream is not None else 1, 1, figsize=(7.2, 6.4 if nn_dream is not None else 4.2), dpi=200,
-                             gridspec_kw={"height_ratios": [3, 2]} if nn_dream is not None else None, sharex=True)
-    axes = np.atleast_1d(axes)
-    ax = axes[0]
-    fig.patch.set_facecolor(t["bg"])
-    ax.set_facecolor(t["panel"])
-    x = np.arange(1, len(floor) + 1)
-    ax.plot(x, floor, color=t["muted"], lw=1.0, ls=":", label="unrelated frame (floor)")
-    ax.plot(x, frozen, color=t["muted"], lw=1.2, ls="--", label="freeze last real frame")
-    palette = [t["amber"], "#60a5fa", "#34d399", "#f472b6"]
-    for (name, c), col in zip(curves.items(), palette):
-        ax.plot(np.arange(1, len(c) + 1), c, color=col, lw=2.0 if col == t["amber"] else 1.3, label=name)
-    for h in horizon_marks:
-        if h <= len(floor):
-            ax.axvline(h, color=t["line"], lw=0.8)
-            ax.text(h, ax.get_ylim()[1], f" {h}", color=t["muted"], fontsize=7, va="top")
-    ax.set_xscale("log")
-    ax.set_ylabel("PSNR vs the real game (dB)", color=t["text"], fontsize=8)
-    ax.legend(fontsize=7, facecolor=t["panel"], edgecolor=t["line"], labelcolor=t["text"], loc="upper right")
-    ax.set_title("Dream drift: same actions, no game code", color=t["text"], fontsize=10, loc="left")
-    if nn_dream is not None:
-        ax2 = axes[1]
-        ax2.set_facecolor(t["panel"])
-        xx = np.arange(1, len(nn_dream) + 1)
-        ax2.plot(xx, nn_real, color=t["muted"], lw=1.2, ls="--", label="real frames (reference)")
-        ax2.plot(xx, nn_dream, color=t["amber"], lw=1.8, label="dream frames")
-        ax2.set_ylabel("PSNR to the nearest\nreal frame (dB)", color=t["text"], fontsize=8)
-        ax2.legend(fontsize=7, facecolor=t["panel"], edgecolor=t["line"], labelcolor=t["text"], loc="lower left")
-        ax2.set_title("Is it still a game frame? (valid even where it no longer matches the true frame)", color=t["text"], fontsize=8, loc="left")
-    axes[-1].set_xlabel("frames since wake-up (autoregressive, no real frames)", color=t["text"], fontsize=8)
-    for a_ in axes:
-        a_.tick_params(colors=t["muted"], labelsize=7)
-        for sp in a_.spines.values():
-            sp.set_color(t["line"])
-        a_.grid(color=t["line"], lw=0.4, alpha=0.6)
-    fig.savefig(path, facecolor=fig.get_facecolor(), bbox_inches="tight")
-    plt.close(fig)
+def to_u8(x):
+    """[E, T, 3, H, W] in [-1, 1] -> [E, T, H, W, 3] uint8"""
+    return ((x + 1) / 2 * 255).round().clamp(0, 255).byte().permute(0, 1, 3, 4, 2).numpy()
+
+
+def from_u8(a):
+    return torch.from_numpy(a).permute(0, 1, 4, 2, 3).float() / 255 * 2 - 1
+
+
+def rollout_figures(name):
+    """media/rollout_grid.png and media/rollout.gif from results/rollouts_<name>.npz (written by a full eval)."""
+    z = np.load(ROOT / "results" / f"rollouts_{name}.npz")
+    gt, gen = from_u8(z["gt"]), from_u8(z["dream"])
+    media = ROOT / "media"
+    media.mkdir(exist_ok=True)
+    save_rollout_grid(media / "rollout_grid.png", gt, gen)
+    save_rollout_gif(media / "rollout.gif", gt, gen)
 
 
 def save_rollout_grid(path, gt, dream, steps=(0, 7, 15, 31, 63, 127, 255, 511), episodes=4, scale=3):
@@ -217,7 +190,7 @@ def save_rollout_gif(path, gt, dream, episodes=3, frames=128, scale=3, every=2):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", required=True)
+    ap.add_argument("--ckpt")
     ap.add_argument("--name", default="model")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--n-val", type=int, default=256)
@@ -229,7 +202,13 @@ def main():
     ap.add_argument("--ctx-sigma", type=float, default=0.05, help="context noise of the primary configuration (the demo default; negative: probe 0/0.05/0.1/0.2)")
     ap.add_argument("--no-figs", action="store_true")
     ap.add_argument("--quick", action="store_true", help="smaller sweeps (smoke checks)")
+    ap.add_argument("--figs-only", action="store_true", help="rebuild media/rollout_grid.png and rollout.gif from results/rollouts_<name>.npz")
     a = ap.parse_args()
+    if a.figs_only:
+        rollout_figures(a.name)
+        return
+    if not a.ckpt:
+        ap.error("--ckpt is required")
     dev = pick_device(a.device)
     model, step = load_ema(a.ckpt)
     model = model.to(dev).eval()
@@ -330,6 +309,13 @@ def main():
     floor = uncorrelated_floor(long_traj, L)
     out["baseline_freeze_last_real_frame"] = {"psnr_at": summarize(fz_p), "ssim_at": summarize(fz_s)}
     out["baseline_unrelated_frame_psnr"] = float(floor.mean())
+    pa = r["psnr_all"]
+    rnd = lambda v: [round(float(x), 3) for x in v]
+    out["figure_curves"] = {"note": "per-frame curves behind media/drift.png (tools/render_drift.mjs); frame 1 = first dreamed frame",
+                            "episodes": a.episodes, "horizon": L,
+                            "dream_mean": rnd(r["psnr"]), "dream_p25": rnd(np.percentile(pa, 25, axis=0)),
+                            "dream_p75": rnd(np.percentile(pa, 75, axis=0)),
+                            "freeze_mean": rnd(fz_p), "unrelated_mean": rnd(floor), "nn_dream": rnd(nn_dream), "nn_real": rnd(nn_real)}
     out["hold_one_key"] = hold_action_rollouts(world, model.denoise, steps=a.steps, ctx_sigma=best_cs, init=a.init, device=str(dev))
     out["spin_360"] = spin_test(world, model.denoise, steps=a.steps, ctx_sigma=best_cs, init=a.init)
     print("360-degree spin:", out["spin_360"], flush=True)
@@ -342,14 +328,10 @@ def main():
     print(json.dumps({k: out[k] for k in ("baseline_copy_last_frame", "one_step_samplers_ctx0.1", "rollout_primary")
                       if k in out}, indent=1)[:3000])
     if not a.no_figs:
-        media = ROOT / "media"
-        media.mkdir(exist_ok=True)
-        save_drift_figure(media / "drift.png", {k: v for k, v in list(curves.items())[:1]}, floor, fz_p, nn_dream, nn_real)
-        gen = r["frames"]
         gt = long_traj["frames"][:, 4:4 + L]
-        save_rollout_grid(media / "rollout_grid.png", gt, gen)
-        save_rollout_gif(media / "rollout.gif", gt, gen)
-        print("figures written to media/")
+        np.savez_compressed(res / f"rollouts_{a.name}.npz", gt=to_u8(gt[:4]), dream=to_u8(r["frames"][:4]))
+        rollout_figures(a.name)
+        print("rollout figures written to media/; the drift figure comes from: node tools/render_drift.mjs --eval results/eval_%s.json" % a.name)
 
 
 if __name__ == "__main__":

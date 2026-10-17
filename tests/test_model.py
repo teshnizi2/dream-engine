@@ -194,6 +194,33 @@ def test_rollout_aligns_actions_and_context_like_training():
             assert torch.allclose(ctx[:, -1], out[:, t - 1], atol=1e-6)
 
 
+def test_cpu_generator_noise_is_the_same_on_every_device():
+    """A seeded CPU generator drives rollouts on MPS/CUDA too (torch refuses a CPU generator for device tensors, so the
+    noise is drawn on the CPU and moved): same seed, same dream, whatever device it runs on."""
+    from model.sampler import randn_with
+    g1, g2 = torch.Generator(), torch.Generator()
+    g1.manual_seed(7), g2.manual_seed(7)
+    a = randn_with((2, 3, 4, 4), g1, torch.device("cpu"), torch.float32)
+    b = torch.randn((2, 3, 4, 4), generator=g2)
+    assert torch.equal(a, b)
+    if torch.backends.mps.is_available():
+        g3 = torch.Generator(); g3.manual_seed(7)
+        c = randn_with((2, 3, 4, 4), g3, torch.device("mps"), torch.float32)
+        assert c.device.type == "mps" and torch.equal(c.cpu(), b)
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="needs Apple MPS")
+def test_rollout_with_a_cpu_generator_runs_on_mps():
+    dev = torch.device("mps")
+    def fake(x, sigma, ctx, act, s_c):
+        return ctx[:, -1] * 0.5
+    frames = torch.zeros(2, 4, 3, 64, 64, device=dev)
+    acts = torch.randint(0, 3, (2, 4 + 3 - 1, 3), device=dev)
+    g = torch.Generator(); g.manual_seed(1)
+    out = rollout(fake, frames, acts, steps=2, ctx_sigma=0.05, generator=g, init="unit")
+    assert out.shape == (2, 3, 3, 64, 64) and out.device.type == "mps"
+
+
 # ------------------------------------------------------------------ metrics
 
 def test_psnr_and_ssim_basics():
