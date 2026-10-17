@@ -26,6 +26,52 @@ def table(header, rows):
     return "\n".join(out)
 
 
+def ablation_tables():
+    """What was tried (all single runs; results/ablation/*.json written by eval.py on ALICE)."""
+    def ev(n):
+        return load(f"results/ablation/eval_{n}.json")
+    def roll(r):
+        return r.get("rollout_primary") or r["rollout_euler3"]
+    parts = []
+    wave1 = [("abl_B", "widths 32-64-96-128, 2 blocks (used)"), ("abl_B_noctx", "same, no context noise"),
+             ("abl_A", "widths 64x4, 2 blocks (DIAMOND size)"), ("abl_Bd1", "widths 32-64-96-128, 1 block")]
+    rows = []
+    for n, label in wave1:
+        r = ev(n)
+        if r:
+            e1 = r["one_step_samplers_ctx0.1"]["euler1"]
+            rows.append([label, f"{r['params'] / 1e6:.2f}M", f1(e1["psnr"]), f"{e1['ssim']:.3f}", f1(roll(r)["psnr_at"]["32"]), f1(r["baseline_copy_last_frame"]["psnr"])])
+    if rows:
+        parts.append("#### Architecture and context noise (game v1, 20k steps each)\n\n"
+                     + table(["variant", "params", "1-step PSNR dB", "SSIM", "rollout PSNR @32 frames", "copy-last baseline"], rows)
+                     + "\n\nAll four land within 0.4 dB: width, depth and context noise were not the bottleneck.")
+    v1, v2 = ev("abl_B"), ev("w2_B")
+    at1, at2 = load("results/error_attribution_abl_B_game_v1.json"), load("results/error_attribution_w2_B.json")
+    if v1 and v2 and at1 and at2:
+        w1, w2 = at1["by_surface"]["window_stripes"], at2["by_surface"]["window_stripes"]
+        rows = [["v1: fine textures", f1(v1["one_step_samplers_ctx0.1"]["euler1"]["psnr"]), f1(v1["baseline_copy_last_frame"]["psnr"]), f"{w1['error_share_pct']:.0f}% ({w1['pixel_share_pct']:.0f}% of pixels)"],
+                ["v2: distance pre-filtered, wide window panes", f1(v2["one_step_samplers_ctx0.1"]["euler1"]["psnr"]), f1(v2["baseline_copy_last_frame"]["psnr"]), f"{w2['error_share_pct']:.0f}% ({w2['pixel_share_pct']:.0f}% of pixels)"]]
+        parts.append("#### The game, not the network, was the ceiling\n\n"
+                     + table(["game version (same model and recipe, 20k steps)", "1-step PSNR dB", "copy-last baseline dB", "share of squared error on window-pane pixels"], rows)
+                     + f"\n\nWindow stripes were {w1['pixel_share_pct']:.0f}% of the pixels but {w1['error_share_pct']:.0f}% of the model's squared error; redesigning them (3 panes per wall, fading to their mean colour with distance) cut that share to {w2['error_share_pct']:.0f}%. Source: `results/error_attribution_*.json` (`tools/error_attribution.py`).")
+    rows = []
+    for n, label in (("w3_ft_plain", "plain fine-tune (control)"), ("w3_ft_unroll3", "DIAMOND-style unroll 3"), ("w3_ft_blur", "context blur augmentation"),
+                     ("w3_ft_rollout3", "scheduled sampling, 3 own frames, p 0.5")):
+        r = ev(n)
+        r2 = load(f"results/ablation/eval2_{n}.json")
+        if r:
+            ro = roll(r)
+            m32 = sum(ro["psnr_curve"][:32]) / 32
+            v = r["validity_nearest_real_frame_psnr"]
+            sharp = (roll(r2).get("sharpness_ratio_last32") if r2 else ro.get("sharpness_ratio_last32"))
+            rows.append([label, f1(r["one_step_samplers_ctx0.1"]["euler1"]["psnr"]), f1(m32), f1(v["dream_mean"]) + f" ({f1(v['real_mean'])})", f"{sharp:.2f}" if sharp is not None else "n/a"])
+    if rows:
+        parts.append("#### Can training fix drift? (4k-step fine-tunes of the 20k-step model, game v2)\n\n"
+                     + table(["fine-tune", "1-step PSNR dB", "mean PSNR over the first 32 rollout frames", "nearest-real-frame PSNR (real frames)", "late-frame sharpness vs real"], rows)
+                     + "\n\nNone improved how long the dream tracks the real game (run-to-run noise is about 0.4 dB). Context blur reduced the collapse onto flat wall views; scheduled sampling sharpened late frames but made them blobby and cost 3 dB.")
+    return "\n\n".join(parts)
+
+
 def build(a):
     ev = load(a.eval)
     probe = load(a.probe)
@@ -126,6 +172,7 @@ def build(a):
                         f"about {fps.get('quiet_ms_note', 'less')}. The WASM fallback measured a few frames per second. Source: `{a.fps}`.")
     text = pathlib.Path(ROOT / "README.template.md").read_text()
     text = text.replace("@@RESULTS_TABLES@@", "\n\n".join(sections))
+    text = text.replace("@@ABLATIONS@@", ablation_tables())
     limits = (ROOT / a.limits).read_text() if a.limits and (ROOT / a.limits).exists() else "@@LIMITS@@"
     text = text.replace("@@LIMITS@@", limits.strip())
     for k, v in tok.items():

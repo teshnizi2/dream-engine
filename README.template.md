@@ -28,6 +28,10 @@ All results are on held-out data from the game's own exploration policy unless s
 
 @@RESULTS_TABLES@@
 
+## What was tried (and what did not help)
+
+@@ABLATIONS@@
+
 ## How to run
 
 ```bash

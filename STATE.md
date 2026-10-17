@@ -25,9 +25,9 @@ Shared rules: `../visual-series-RULES.md` (ALICE is approved for this project's 
 2. **No dataset on disk** (Mac has ~10 GB free): trajectories are generated on the fly.
 3. **Bit-exact JS/Python twins**: no libm trig in the simulation loop; heading is a unit vector rotated by a precomputed (cos, sin).
 4. **Game v2 (commit 17cf67f): learnable textures.** Wave 1 (game v1, fine textures) saturated at ~28 dB 1-step for every
-   architecture. Error attribution: window-stripe pixels were 5% of the pixels and 65% of the squared error. Textures are now
+   architecture. Error attribution (`results/error_attribution_*.json`): window-stripe pixels were 5% of the pixels and 58% of the squared error (first ad-hoc estimate on 128 windows: 65%). Textures are now
    distance pre-filtered ("mip" 2..7 cells fades them to their mean colour), window panes are 3 per face, fewer thin lines.
-   Same recipe, 20k steps: 27.9 -> 30.7 dB. Window panes are still 5% of pixels and 37% of the error.
+   Same recipe, 20k steps: 27.9 -> 30.7 dB. Window panes are still 5% of pixels and 36.5% of the error.
 5. **Model**: DIAMOND U-Net, widths 32-64-96-128, 2 res blocks per level, mid-block attention, cond 256, K = 4 frames, EDM
    (sigma_data 0.5, offset noise 0.3, lognormal(-0.4, 1.2)), context-noise augmentation sigma_c ~ U(0, 0.5) p 0.9. 6.77M params.
    Width/depth did not matter at 20k steps (A 64x4: 28.0, B: 27.9, depth-1: 27.7, no context noise: 27.7 dB on game v1).

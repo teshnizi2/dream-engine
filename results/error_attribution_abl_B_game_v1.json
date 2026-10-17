@@ -1,0 +1,58 @@
+{
+ "script": "python tools/error_attribution.py --ckpt /Users/teshnizi/Random projects/dream-engine/runs/abl_B/final_ema.pt --name abl_B --out /Users/teshnizi/Random projects/dream-engine/results/error_attribution_abl_B_game_v1.json",
+ "checkpoint": "/Users/teshnizi/Random projects/dream-engine/runs/abl_B/final_ema.pt",
+ "step": 20000,
+ "windows": 256,
+ "pooled_psnr": 23.86553192138672,
+ "by_surface": {
+  "floor_ceiling": {
+   "error_share_pct": 6.190199851989746,
+   "pixel_share_pct": 25.02613067626953,
+   "mean_mse": 0.0010156817734241486
+  },
+  "stone": {
+   "error_share_pct": 5.218266010284424,
+   "pixel_share_pct": 18.647003173828125,
+   "mean_mse": 0.0011491159675642848
+  },
+  "red_brick": {
+   "error_share_pct": 6.154932498931885,
+   "pixel_share_pct": 12.682723999023438,
+   "mean_mse": 0.0019927711691707373
+  },
+  "blue_door": {
+   "error_share_pct": 11.579523086547852,
+   "pixel_share_pct": 4.184722900390625,
+   "mean_mse": 0.011362414807081223
+  },
+  "amber_pillar": {
+   "error_share_pct": 0.7895811200141907,
+   "pixel_share_pct": 0.3025054931640625,
+   "mean_mse": 0.010717911645770073
+  },
+  "window_stripes": {
+   "error_share_pct": 57.822479248046875,
+   "pixel_share_pct": 4.9793243408203125,
+   "mean_mse": 0.04768403246998787
+  },
+  "moss": {
+   "error_share_pct": 7.2714715003967285,
+   "pixel_share_pct": 14.753532409667969,
+   "mean_mse": 0.002023824956268072
+  },
+  "purple": {
+   "error_share_pct": 0.8907485604286194,
+   "pixel_share_pct": 6.7813873291015625,
+   "mean_mse": 0.00053936563199386
+  },
+  "ochre": {
+   "error_share_pct": 4.082800388336182,
+   "pixel_share_pct": 12.642669677734375,
+   "mean_mse": 0.0013260687701404095
+  }
+ },
+ "strong_vertical_edges": {
+  "pixel_share_pct": 20.745086669921875,
+  "error_share_pct": 71.29683685302734
+ }
+}

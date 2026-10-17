@@ -1,0 +1,58 @@
+{
+ "script": "python tools/error_attribution.py --ckpt runs/w2_B_final_ema.pt --name w2_B --out results/error_attribution_w2_B.json",
+ "checkpoint": "runs/w2_B_final_ema.pt",
+ "step": 20000,
+ "windows": 256,
+ "pooled_psnr": 27.42465591430664,
+ "by_surface": {
+  "floor_ceiling": {
+   "error_share_pct": 22.683351516723633,
+   "pixel_share_pct": 25.02613067626953,
+   "mean_mse": 0.0016400156309828162
+  },
+  "stone": {
+   "error_share_pct": 6.4162702560424805,
+   "pixel_share_pct": 18.647003173828125,
+   "mean_mse": 0.0006225985125638545
+  },
+  "red_brick": {
+   "error_share_pct": 7.796298503875732,
+   "pixel_share_pct": 12.682723999023438,
+   "mean_mse": 0.001112270401790738
+  },
+  "blue_door": {
+   "error_share_pct": 9.263001441955566,
+   "pixel_share_pct": 4.184722900390625,
+   "mean_mse": 0.004005156923085451
+  },
+  "amber_pillar": {
+   "error_share_pct": 1.3813763856887817,
+   "pixel_share_pct": 0.3025054931640625,
+   "mean_mse": 0.008262533694505692
+  },
+  "window_stripes": {
+   "error_share_pct": 36.47172546386719,
+   "pixel_share_pct": 4.9793243408203125,
+   "mean_mse": 0.01325318869203329
+  },
+  "moss": {
+   "error_share_pct": 6.568472385406494,
+   "pixel_share_pct": 14.753532409667969,
+   "mean_mse": 0.000805569114163518
+  },
+  "purple": {
+   "error_share_pct": 2.0182628631591797,
+   "pixel_share_pct": 6.7813873291015625,
+   "mean_mse": 0.0005385098629631102
+  },
+  "ochre": {
+   "error_share_pct": 7.401241302490234,
+   "pixel_share_pct": 12.642669677734375,
+   "mean_mse": 0.0010592542821541429
+  }
+ },
+ "strong_vertical_edges": {
+  "pixel_share_pct": 14.173698425292969,
+  "error_share_pct": 63.00394821166992
+ }
+}
