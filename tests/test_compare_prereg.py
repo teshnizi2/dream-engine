@@ -49,6 +49,11 @@ def test_when_no_variant_is_eligible_the_lowest_collapse_rate_overall_goes_ahead
     import compare_prereg as C
     r = C.select_variant({"a": row(8, 0.15), "b": row(9, 0.12, 4, "v3")}, row(12, 0.20))
     assert r["winner"] == "b" and r["eligible"] == [] and "no variant" in r["reason"]
+    # no tie-break applies in that case (PREREG section 5: "the lowest collapse rate overall"), even for rates within 0.02 of each other
+    r = C.select_variant({"a": row(11, 0.100, 8), "b": row(9, 0.095, 4, "v3")}, row(12, 0.20))
+    assert r["winner"] == "b"
+    r = C.select_variant({"a": row(11, 0.095, 8), "b": row(9, 0.100, 4, "v3")}, row(12, 0.20))
+    assert r["winner"] == "a"
 
 
 # ---------------------------------------------------------------- adoption
@@ -124,3 +129,17 @@ def test_compare_runs_on_saved_evaluations_applies_both_rules(tmp_path):
     fin = C.final(tmp_path, "full2", "full1")
     assert fin["adoption"]["adopt"] is True and fin["pairing_check_real_flat_flags_agree"] == 1.0
     assert 0 < fin["paired_ratio_ci95"][0] <= fin["collapse_ratio"] <= fin["paired_ratio_ci95"][1]
+
+
+# ---------------------------------------------------------------- the compared evaluations must follow one protocol
+
+def test_comparing_evaluations_with_different_protocols_is_refused(tmp_path):
+    import compare_prereg as C
+    fake_eval(tmp_path, "w2_B", 4, "v2", horizon_drop=12, collapse_from=60)
+    fake_eval(tmp_path, "v3k4", 4, "v3", horizon_drop=14, collapse_from=300)
+    C.ablation(tmp_path, baseline="w2_B", variants=["v3k4"])                  # same protocol: fine
+    j = json.loads((tmp_path / "prereg_v3k4.json").read_text())
+    j["collapse"]["window"] = 16                                               # someone evaluated with another window
+    (tmp_path / "prereg_v3k4.json").write_text(json.dumps(j))
+    with pytest.raises(ValueError, match="window"):
+        C.ablation(tmp_path, baseline="w2_B", variants=["v3k4"])

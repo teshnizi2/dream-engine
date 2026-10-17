@@ -23,6 +23,31 @@ def _game(path: str) -> str:
     return "v3" if "v3" in pathlib.Path(path).name else "v2"
 
 
+REGISTERED = {"window": 32, "t_range": [64, 512], "flat_max_bg": 0.05, "bg_tol": 4}      # docs/PREREG-v3.md section 4
+
+
+def check_protocol(res: pathlib.Path, names: list) -> None:
+    """Every compared evaluation must follow the registered protocol and the same one: same collapse definition, same number of
+    episodes and frames, and (where recorded) the same wake-up frame, sampler and trajectories. Raises ValueError otherwise."""
+    seen = {}
+    for n in names:
+        j = json.loads((res / f"prereg_{n}.json").read_text())
+        c = j["collapse"]
+        facts = {"window": c["window"], "t_range": list(c["t_range"]), "flat_max_bg": c["flat_max_bg"], "bg_tol": c["bg_tol"],
+                 "episodes": j["tracking_horizon_20db"]["episodes"], "frames": len(j["tracking_horizon_20db"]["per_episode"]) and None}
+        facts.pop("frames")
+        for k, v in REGISTERED.items():
+            if facts[k] != v:
+                raise ValueError(f"{n}: {k} is {facts[k]} but the pre-registered value is {v}")
+        for k in ("wake_frame", "horizon", "trajectory_seed", "sampler"):
+            if k in j.get("protocol", {}):
+                facts["protocol_" + k] = j["protocol"][k]
+        for k, v in facts.items():
+            if k in seen and seen[k][1] != v:
+                raise ValueError(f"{n}: {k} is {v} but {seen[k][0]} used {seen[k][1]}")
+            seen.setdefault(k, (n, v))
+
+
 def load_row(res: pathlib.Path, name: str) -> dict:
     j = json.loads((res / f"prereg_{name}.json").read_text())
     return {"name": name, "K": j["num_ctx"], "game": _game(j["game"]), "steps": j.get("step"),
@@ -42,13 +67,15 @@ def select_variant(variants: dict, baseline: dict) -> dict:
     """The rule of section 5: eligible = median horizon not below the baseline's; lowest collapse rate wins; rates within 0.02 are a tie
     broken by the longer median horizon, then the smaller K, then v3 over v2; if none is eligible, the lowest collapse rate overall."""
     eligible = [n for n, v in variants.items() if v["horizon_median"] >= baseline["horizon_median"]]
-    pool = eligible or list(variants)
-    best = min(variants[n]["collapse"] for n in pool)
-    tied = [n for n in pool if variants[n]["collapse"] - best < TIE]
+    if not eligible:                                    # PREREG section 5: "the lowest collapse rate overall", no tie-break
+        winner = min(variants, key=lambda n: variants[n]["collapse"])
+        return {"winner": winner, "eligible": [], "tied": [winner],
+                "reason": f"no variant has a median horizon of at least the baseline's ({baseline['horizon_median']}): the lowest collapse rate overall goes ahead ({variants[winner]['collapse']:.3f}); chosen: {winner}"}
+    best = min(variants[n]["collapse"] for n in eligible)
+    tied = [n for n in eligible if variants[n]["collapse"] - best < TIE]
     winner = sorted(tied, key=lambda n: (-variants[n]["horizon_median"], variants[n]["K"], 0 if variants[n]["game"] == "v3" else 1))[0]
     reason = (f"{len(eligible)} of {len(variants)} variants have a median horizon of at least the baseline's ({baseline['horizon_median']}); "
-              if eligible else "no variant has a median horizon of at least the baseline's: the lowest collapse rate overall goes ahead; ")
-    reason += f"collapse rates within {TIE} of the lowest ({best:.3f}): {tied}; chosen: {winner}"
+              f"collapse rates within {TIE} of the lowest ({best:.3f}): {tied}; chosen: {winner}")
     return {"winner": winner, "eligible": eligible, "tied": tied, "reason": reason}
 
 
@@ -91,6 +118,7 @@ def _paired(res, new: str, ref: str, rows: dict) -> dict:
 
 def ablation(res, baseline: str, variants: list) -> dict:
     res = pathlib.Path(res)
+    check_protocol(res, [baseline, *variants])
     rows = {n: load_row(res, n) for n in [baseline, *variants]}
     sel = select_variant({n: rows[n] for n in variants}, rows[baseline])
     base_bg = np.load(res / f"prereg_{baseline}.npz")["bg_real"]
@@ -101,6 +129,7 @@ def ablation(res, baseline: str, variants: list) -> dict:
 
 def final(res, new: str, ref: str) -> dict:
     res = pathlib.Path(res)
+    check_protocol(res, [new, ref])
     jn, jr = (json.loads((res / f"prereg_{n}.json").read_text()) for n in (new, ref))
     rn, rr = load_row(res, new), load_row(res, ref)
     zn, zr = np.load(res / f"prereg_{new}.npz"), np.load(res / f"prereg_{ref}.npz")

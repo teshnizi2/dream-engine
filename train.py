@@ -150,6 +150,9 @@ def main(argv=None):
         model.load_state_dict(ck["model"])
         ema.load_state_dict(ck["ema"])
         opt.load_state_dict(ck["opt"])
+        prev_game = (ck.get("args") or {}).get("game") or "game/spec_v2.json"       # runs from before v3 recorded no game: all were v2
+        if pathlib.Path(prev_game).name != pathlib.Path(a.game).name:
+            raise SystemExit(f"refusing to resume: {a.out} was trained on game {prev_game}, this job says --game {a.game}")
         step, resumes, elapsed_prev = ck["step"], ck.get("resumes", 0) + 1, ck.get("elapsed_s", 0.0)
         print(f"resumed from step {step} (resume #{resumes})", flush=True)
         if step >= a.steps:

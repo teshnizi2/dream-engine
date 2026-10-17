@@ -184,3 +184,16 @@ No change to a metric, constant, rule or protocol so far. Infrastructure fixes, 
    curve was added, the same pre-registered evaluation applied to the milestone checkpoints (every 20k steps) of `full1` and `full2`
    (`alice/prereg_milestones.slurm`, `results/prereg_<run>_s<step>.json`). It asks whether the effect of v3 on the collapse rate grows
    with training. It plays no part in the selection or adoption rules and cannot change them.
+4. 2026-10-17, while `full2` was training: an independent read-only review of the code against this document (by a separate agent that was given
+   the files and this document, not any result) found no bug in the decisive path and led to these changes, none of which alters a
+   definition, constant or rule:
+   * `one_step_metrics` ignored its `seed` (the secondary one-step PSNR in the json files computed so far carries about 0.1 dB of sampling
+     noise); it is now seeded. The tracking horizon, collapse rate and spin return were not affected.
+   * the window-64 collapse rate, promised in section 4, was added to the saved evaluation files with `eval_prereg.py --reanalyze` (it
+     recomputes only what derives from the saved per-frame arrays; every other number in those files is unchanged);
+   * the selection rule's "no variant is eligible" case now follows the text (lowest collapse rate overall, no tie-break; not triggered);
+   * guards: a run cannot be resumed on another game, `eval_prereg.py` refuses a `--game` that contradicts the checkpoint, and
+     `tools/compare_prereg.py` refuses to compare evaluations that used different protocol constants.
+   Two wordings are clarified to what was implemented all along (the baselines were evaluated with it before any v3 number existed): the tracking
+   horizon of an episode is the first frame t for which the mean PSNR of frames t to t+4 is below the threshold (the v2 convention, a forward
+   window); and "the landmark pillar keeps its exact amber look" means its colour is untinted: like every wall it is shaded by face direction.

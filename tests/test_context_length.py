@@ -227,3 +227,39 @@ def test_export_cli_can_write_a_random_8_context_model_for_browser_tests(tmp_pat
     g = onnx.load(str(tmp_path / "dream_fp32.onnx"))
     ins = {i.name: [d.dim_value for d in i.type.tensor_type.shape.dim] for i in g.graph.input}
     assert ins["ctx"] == [1, 24, 64, 64] and ins["act"] == [1, 8, 9]
+
+
+# ------------------------------------------------------------------ review findings: reproducibility and guards
+
+def test_one_step_metrics_are_reproducible_for_a_seed_and_differ_between_seeds(world):
+    """The seed argument used to be ignored (the global torch RNG drove the context noise and the sampler): two identical calls gave
+    different PSNRs."""
+    torch.manual_seed(0)
+    m = Denoiser(DenoiserConfig(**TINY, num_ctx=4)).eval()
+    torch.nn.init.normal_(m.inner.conv_out.weight, std=0.05)
+    w = ev.val_windows(world, n=6, seed=2)
+    a = ev.one_step_metrics(m.denoise, w, steps=1, ctx_sigma=0.1, init="unit", seed=3)
+    torch.manual_seed(123)                                  # a different global state must not matter
+    b = ev.one_step_metrics(m.denoise, w, steps=1, ctx_sigma=0.1, init="unit", seed=3)
+    c = ev.one_step_metrics(m.denoise, w, steps=1, ctx_sigma=0.1, init="unit", seed=4)
+    assert a["psnr"] == b["psnr"] and a["psnr"] != c["psnr"]
+
+
+def test_resuming_a_run_on_a_different_game_is_refused(tmp_path):
+    r = run_train(tmp_path, "--steps", "2", "--game", "game/spec_v2.json")
+    assert r.returncode == 0, r.stderr[-2000:]
+    r = run_train(tmp_path, "--steps", "4", "--resume", "--game", "game/spec_v3.json")
+    assert r.returncode != 0 and "game" in (r.stderr + r.stdout).lower()
+
+
+def test_eval_prereg_refuses_a_game_that_contradicts_the_checkpoint(tmp_path, monkeypatch):
+    import eval_prereg as P
+    run = tmp_path / "run"
+    r = run_train(run, "--steps", "2", "--game", "game/spec_v3.json")
+    assert r.returncode == 0, r.stderr[-2000:]
+    monkeypatch.setattr(P, "ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["eval_prereg.py", "--ckpt", str(run / "final_ema.pt"), "--name", "x", "--game", "game/spec_v2.json",
+                                      "--device", "cpu", "--episodes", "2", "--n-traj", "2", "--horizon", "10"])
+    with pytest.raises(SystemExit) as e:
+        P.main()
+    assert "game" in str(e.value).lower()

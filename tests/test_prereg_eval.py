@@ -28,6 +28,7 @@ def test_analyze_reports_tracking_horizon_and_collapse_from_per_frame_arrays():
     assert a["collapse"]["rate"] == pytest.approx(397 / 449 / 4)
     assert a["collapse"]["window"] == 16 and len(a["collapse"]["rate_ci95"]) == 2
     assert a["collapse_plain"]["rate"] == pytest.approx(412 / 449 / 4)              # every flat frame counts when the window is 1
+    assert a["collapse_window64"]["window"] == 64 and a["collapse_window64"]["rate"] == pytest.approx((512 - 164 + 1) / 449 / 4)       # stuck from frame 164
     assert a["real_flat_share"] == 0.0 and a["dream_flat_share"] == pytest.approx(412 / 449 / 4)       # shares over frames 64..512
 
 
@@ -85,3 +86,21 @@ def test_flat_escape_starts_on_a_flat_wall_and_a_frozen_dream_never_leaves_it():
     assert abs(r["dream_psnr_at"]["16"] - r["freeze_psnr_at"]["16"]) < 1e-3
     assert r["dream_flat_share_at_end"] == 1.0 and r["real_flat_share_at_end"] < 0.7        # the real game turns away from the wall
     assert set(r["dream_psnr_at"]) == {"4", "8", "16", "24"}
+
+
+def test_reanalyze_recomputes_the_cpu_side_numbers_of_a_saved_evaluation(tmp_path):
+    """`--reanalyze` rebuilds everything derived from the saved per-frame arrays (here: adds the window-64 collapse rate that older
+    json files lack) and leaves the GPU-side numbers (spin, one step) alone."""
+    import eval_prereg as P
+    E, L = 3, 520
+    psnr = np.full((E, L), 25.0, dtype=np.float32)
+    bg_r = np.full((E, L), 0.3, dtype=np.float32)
+    bg_d = bg_r.copy()
+    bg_d[0, 100:] = 0.0
+    np.savez(tmp_path / "prereg_old.npz", psnr=psnr, bg_dream=bg_d, bg_real=bg_r)
+    old = P.analyze(psnr, bg_d, bg_r)
+    old.pop("collapse_window64")
+    (tmp_path / "prereg_old.json").write_text(json.dumps({**old, "spin_360": {"x": 1}, "protocol": {"flat_wall": {"window": 32, "max_bg": 0.05}}}))
+    out = P.reanalyze(tmp_path, "old")
+    assert out["collapse_window64"]["window"] == 64 and out["spin_360"] == {"x": 1}
+    assert json.loads((tmp_path / "prereg_old.json").read_text())["collapse_window64"]["rate"] == out["collapse_window64"]["rate"]

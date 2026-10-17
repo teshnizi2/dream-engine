@@ -8,7 +8,7 @@ import torch
 from data.loader import TrajectorySource
 from model import metrics
 from model.denoiser import encode_actions
-from model.sampler import build_sigmas, rollout, sample_next
+from model.sampler import build_sigmas, randn_with, rollout, sample_next
 
 
 def _to_unit(frames_u8: np.ndarray) -> torch.Tensor:
@@ -59,14 +59,15 @@ def one_step_metrics(denoise_fn: Callable, windows: Dict[str, torch.Tensor], ste
     dev = fr.device
     sig = build_sigmas(steps, 2e-3, sigma_max, 7.0)
     ps, ss, preds = [], [], []
+    gen = None                                              # one generator per call, so a seed reproduces the context noise and the sampler noise
     for i in range(0, len(fr), batch):
         ctx, tgt, a = fr[i:i + batch, T - 1 - K:T - 1], fr[i:i + batch, T - 1], ac[i:i + batch, T - 1 - K:T - 1]
         dev = _device_of(denoise_fn, ctx)
         ctx, tgt = ctx.to(dev), tgt.to(dev)
-        gen = None
+        gen = gen if gen is not None else _gen(seed, dev)
         c = ctx
         if ctx_sigma > 0:
-            c = c + torch.randn(c.shape, device=dev) * ctx_sigma
+            c = c + randn_with(c.shape, gen, dev, c.dtype) * ctx_sigma
         s_c = torch.full((len(ctx),), float(ctx_sigma), device=dev)
         pred = sample_next(denoise_fn, c, encode_actions(a).to(dev), s_c, sig.to(dev), order=order,
                            quantize=True, generator=gen, init=init)

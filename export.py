@@ -170,15 +170,20 @@ def load_ema(ckpt_path: str) -> Denoiser:
     return m.eval(), ck.get("step", -1)
 
 
-def ckpt_game(ckpt_path: str) -> str:
-    """The game spec (path relative to the repo root) a checkpoint was trained on; checkpoints from before v3 did not
-    record it and were all trained on the v2 game."""
+def ckpt_game_recorded(ckpt_path: str):
+    """The game spec recorded in a checkpoint (or in the ckpt_last.pt next to it), or None if nothing was recorded."""
     ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     game = (ck.get("args") or {}).get("game")
     sibling = pathlib.Path(ckpt_path).with_name("ckpt_last.pt")            # runs from before final_ema.pt carried its args
     if game is None and sibling.exists() and sibling != pathlib.Path(ckpt_path):
         game = (torch.load(sibling, map_location="cpu", weights_only=False).get("args") or {}).get("game")
-    return game or "game/spec_v2.json"
+    return game
+
+
+def ckpt_game(ckpt_path: str) -> str:
+    """The game spec (path relative to the repo root) a checkpoint was trained on; checkpoints from before v3 did not record it and
+    were all trained on the v2 game."""
+    return ckpt_game_recorded(ckpt_path) or "game/spec_v2.json"
 
 
 def verify(model: Denoiser, onnx_path: str, cases) -> dict:

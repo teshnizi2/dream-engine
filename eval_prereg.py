@@ -29,7 +29,7 @@ ROOT = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 import eval as E  # noqa: E402  (helpers: tracking horizons, spin test, uint8 conversion)
-from export import ckpt_game, load_ema  # noqa: E402
+from export import ckpt_game, ckpt_game_recorded, load_ema  # noqa: E402
 from game import raycaster as rc  # noqa: E402
 from model import evaluate as ev  # noqa: E402
 from model import flatwall as fw  # noqa: E402
@@ -74,9 +74,22 @@ def analyze(psnr_all, bg_dream, bg_real, window=fw.STUCK_WINDOW, max_bg=fw.FLAT_
         "psnr_at": E.summarize(mean_curve, PSNR_AT),
         "collapse": _collapse(fd, fr, window, max_bg),
         "collapse_plain": _collapse(fd, fr, 1, max_bg),
+        "collapse_window64": _collapse(fd, fr, 64, max_bg),
         "dream_flat_share": float(fd[:, lo - 1:hi].mean()) if fd.shape[1] >= lo else float("nan"),
         "real_flat_share": float(fr[:, lo - 1:hi].mean()) if fr.shape[1] >= lo else float("nan"),
     }
+
+
+def reanalyze(res, name: str) -> dict:
+    """Recompute everything derived from the saved per-frame arrays of `results/prereg_<name>.npz` with the constants recorded in its json
+    (the GPU-side numbers: spin return, one step, flat escape, are left alone) and write the json back."""
+    res = pathlib.Path(res)
+    j = json.loads((res / f"prereg_{name}.json").read_text())
+    z = np.load(res / f"prereg_{name}.npz")
+    fwc = j["protocol"]["flat_wall"]
+    j.update(analyze(z["psnr"], z["bg_dream"], z["bg_real"], window=fwc["window"], max_bg=fwc["max_bg"]))
+    (res / f"prereg_{name}.json").write_text(json.dumps(j, indent=1))
+    return j
 
 
 def flat_escape(world, denoise, K, n=64, horizon=24, seed=21, steps=2, ctx_sigma=0.05, init="unit"):
@@ -115,8 +128,9 @@ def flat_escape(world, denoise, K, n=64, horizon=24, seed=21, steps=2, ctx_sigma
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", required=True)
+    ap.add_argument("--ckpt")
     ap.add_argument("--name", required=True)
+    ap.add_argument("--reanalyze", action="store_true", help="recompute the CPU-side numbers of an existing evaluation from its saved arrays and stop")
     ap.add_argument("--game", default=None, help="game spec json (default: the game the checkpoint was trained on)")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--episodes", type=int, default=64, help="episodes scored (the first ones of the %d trajectories)" % N_TRAJ)
@@ -130,12 +144,22 @@ def main():
     ap.add_argument("--out-dir", default="results", help="where the json and npz go (relative to the repository root)")
     ap.add_argument("--only-flat-escape", action="store_true", help="add the exploratory flat-escape diagnostic to an existing prereg json and stop")
     a = ap.parse_args()
+    if a.reanalyze:
+        d = pathlib.Path(a.out_dir)
+        j = reanalyze(d if d.is_absolute() else ROOT / d, a.name)
+        print(json.dumps({"name": a.name, "collapse": j["collapse"]["rate"], "collapse_window64": j["collapse_window64"]["rate"]}))
+        return
+    if not a.ckpt:
+        ap.error("--ckpt is required")
     dev = E.pick_device(a.device)
     model, step = load_ema(a.ckpt)
     model = model.to(dev).eval()
     K = model.cfg.num_ctx
     assert K <= WAKE, "the wake-up frame must leave room for the context"
     game = a.game or ckpt_game(a.ckpt)
+    recorded = ckpt_game_recorded(a.ckpt)
+    if recorded and pathlib.Path(recorded).name != pathlib.Path(game).name:
+        raise SystemExit(f"the checkpoint was trained on game {recorded} but --game says {game}: refusing to evaluate on the wrong game")
     world = rc.World(rc.load_spec(game))
     if a.only_flat_escape:
         path = (pathlib.Path(a.out_dir) if pathlib.Path(a.out_dir).is_absolute() else ROOT / a.out_dir) / f"prereg_{a.name}.json"
