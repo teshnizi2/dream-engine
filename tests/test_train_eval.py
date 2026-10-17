@@ -138,3 +138,43 @@ def test_train_script_supports_rollout_context_training(tmp_path):
     assert r.returncode == 0, r.stderr[-2000:]
     ck = torch.load(tmp_path / "ckpt_last.pt", map_location="cpu", weights_only=False)
     assert ck["step"] == 4
+
+
+# ------------------------------------------------------------------ eval.py helpers (spin test, tracking horizon, sharpness)
+
+def test_first_below_and_grad_mag_helpers():
+    import eval as E
+    assert E.first_below([30, 28, 24, 19, 18], 25.0) == 3
+    assert E.first_below([30, 28], 25.0) == 3                      # never below: len + 1
+    flat = torch.zeros(2, 3, 8, 8)
+    stripes = flat.clone()
+    stripes[..., ::2] = 1.0
+    assert E.grad_mag(flat) == 0 and E.grad_mag(stripes) > 0.4
+
+
+def test_spin_test_with_a_frozen_dream_never_returns_a_different_view(world):
+    """A denoiser that always repeats the last context frame stays on the start view: it matches the start view exactly
+    at frame 72 (the real game also returns to it after 72 x 5 degrees), but not the real frames in between."""
+    import eval as E
+
+    def copy_last(x, sigma, ctx, act, s_c):
+        return ctx[:, -1]
+
+    r = E.spin_test(world, copy_last, n=3, steps=1, ctx_sigma=0.0)
+    assert r["real_frame72_vs_start_view_psnr"] >= 99, "the real game closes the loop after 72 turns of 5 degrees"
+    assert r["dream_frame72_vs_start_view_psnr"] >= 99
+    assert r["dream_psnr_at"]["24"] < 25
+
+
+def test_hold_one_key_rollouts_report_every_control(world):
+    import eval as E
+
+    def copy_last(x, sigma, ctx, act, s_c):
+        return ctx[:, -1]
+
+    r = E.hold_action_rollouts(world, copy_last, n=3, horizon=8, steps=1, ctx_sigma=0.0)
+    assert set(r) == set(E.HOLD_ACTIONS)
+    for k, v in r.items():
+        assert set(v["dream_psnr_at"]) >= {"1", "4", "8"} and np.isfinite(list(v["freeze_psnr_at"].values())).all()
+        # copying the last frame IS the freeze baseline
+        assert abs(v["dream_psnr_at"]["8"] - v["freeze_psnr_at"]["8"]) < 1e-3
