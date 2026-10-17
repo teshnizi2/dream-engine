@@ -180,3 +180,7 @@ No change to a metric, constant, rule or protocol so far. Infrastructure fixes, 
    to `eval_prereg.py` (section 4); the in-job evaluations of the three ablation runs include it. The two v2 baselines (`w2_B`, `full1`)
    were evaluated before it existed; their diagnostic is added afterwards to the same json with `--only-flat-escape` (the pre-registered
    numbers in those files are untouched).
+3. 2026-10-17, after the 20k-step ablation result and the selection (v3k4) were known, while `full2` was training: an exploratory learning
+   curve was added, the same pre-registered evaluation applied to the milestone checkpoints (every 20k steps) of `full1` and `full2`
+   (`alice/prereg_milestones.slurm`, `results/prereg_<run>_s<step>.json`). It asks whether the effect of v3 on the collapse rate grows
+   with training. It plays no part in the selection or adoption rules and cannot change them.
