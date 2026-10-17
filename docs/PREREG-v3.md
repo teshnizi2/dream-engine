@@ -197,3 +197,7 @@ No change to a metric, constant, rule or protocol so far. Infrastructure fixes, 
    Two wordings are clarified to what was implemented all along (the baselines were evaluated with it before any v3 number existed): the tracking
    horizon of an episode is the first frame t for which the mean PSNR of frames t to t+4 is below the threshold (the v2 convention, a forward
    window); and "the landmark pillar keeps its exact amber look" means its colour is untinted: like every wall it is shaded by face direction.
+5. 2026-10-17, while `full2` was training (after the milestone results at 20k to 60k steps were seen: they show no systematic difference between v2
+   and v3): an exploratory probe `tools/signature_use.py` was added. It runs the flat-wall escape diagnostic in the v3 game and in a copy whose tint
+   phases are shifted (a different position code on the same geometry), each scored against its own game's real frames; the PSNR drop measures how
+   much a model relies on the signature. It is applied to `v3k4` and `full2` only, plays no part in any rule, and is reported as exploratory.
