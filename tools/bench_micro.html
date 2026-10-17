@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>micro</title><body><pre id="o"></pre>
+<script type="module">
+import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs';
+const q = new URLSearchParams(location.search);
+const res = {};
+try {
+  for (const name of q.get('models').split(',')) {
+    const sess = await ort.InferenceSession.create(`/tools/bench_models/${name}.onnx`, { executionProviders: [{ name: 'webgpu', preferredLayout: q.get('layout') || 'NHWC' }] });
+    const C = name.startsWith('conv') ? 64 : 3;
+    const x = new ort.Tensor('float32', new Float32Array(C * 4096).fill(0.5), [1, C, 64, 64]);
+    for (let i = 0; i < 8; i++) await sess.run({ x });
+    const ts = [];
+    for (let i = 0; i < 40; i++) { const t = performance.now(); const o = await sess.run({ x }); const d = o.y.data[0]; ts.push(performance.now() - t); }
+    ts.sort((a, b) => a - b);
+    res[name] = { median_ms: ts[20], p10: ts[4] };
+  }
+} catch (e) { res.error = String(e.stack || e); }
+window.__bench = res;
+</script>

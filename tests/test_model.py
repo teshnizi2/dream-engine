@@ -206,3 +206,14 @@ def test_psnr_and_ssim_basics():
     s_noisy = metrics.ssim(a, b)
     assert torch.allclose(s_same, torch.ones(3), atol=1e-4)
     assert (s_noisy < s_same).all()
+
+
+def test_group_count_divides_any_channel_width():
+    from model.unet import num_groups
+    assert [num_groups(c) for c in (32, 64, 96, 128, 192)] == [1, 2, 3, 4, 6]       # DIAMOND: channels // 32
+    for c in (24, 40, 48, 56, 80, 112, 144):
+        assert c % num_groups(c) == 0
+    m = Denoiser(DenoiserConfig(channels=(48, 64, 96, 128), depths=(1, 1, 1, 1), cond_channels=64))
+    ctx, tgt, act = rand_batch(B=2)
+    loss, _ = m.loss(ctx, tgt, act)
+    assert torch.isfinite(loss)

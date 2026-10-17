@@ -17,6 +17,14 @@ GN_GROUP_SIZE = 32
 GN_EPS = 1e-5
 ATTN_HEAD_DIM = 8
 
+def num_groups(channels: int) -> int:
+    """DIAMOND: channels // 32 groups. For widths that are not multiples of 32, fall back to the largest divisor."""
+    g = max(1, channels // GN_GROUP_SIZE)
+    while channels % g:
+        g -= 1
+    return g
+
+
 Conv1x1 = partial(nn.Conv2d, kernel_size=1, stride=1, padding=0)
 Conv3x3 = partial(nn.Conv2d, kernel_size=3, stride=1, padding=1)
 
@@ -24,7 +32,7 @@ Conv3x3 = partial(nn.Conv2d, kernel_size=3, stride=1, padding=1)
 class GroupNorm(nn.Module):
     def __init__(self, in_channels: int) -> None:
         super().__init__()
-        self.norm = nn.GroupNorm(max(1, in_channels // GN_GROUP_SIZE), in_channels, eps=GN_EPS)
+        self.norm = nn.GroupNorm(num_groups(in_channels), in_channels, eps=GN_EPS)
 
     def forward(self, x: Tensor) -> Tensor:
         return self.norm(x)
@@ -36,7 +44,7 @@ class AdaGroupNorm(nn.Module):
     def __init__(self, in_channels: int, cond_channels: int) -> None:
         super().__init__()
         self.in_channels = in_channels
-        self.num_groups = max(1, in_channels // GN_GROUP_SIZE)
+        self.num_groups = num_groups(in_channels)
         self.linear = nn.Linear(cond_channels, in_channels * 2)
 
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:

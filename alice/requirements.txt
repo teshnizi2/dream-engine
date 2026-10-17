@@ -1,0 +1,5 @@
+# training-only dependencies for the ALICE env (same versions as the local .venv)
+torch==2.14.1
+numpy==2.5.4
+pillow==13.0.0
+pytest==9.1.1

@@ -108,6 +108,12 @@ class Denoiser(nn.Module):
         d = cs.c_skip.view(-1, 1, 1, 1) * x + cs.c_out.view(-1, 1, 1, 1) * self._F(x, cs, ctx, act, s_c)
         return d.clamp(-1, 1) if clamp else d
 
+    def denoise_flat(self, x: Tensor, sigma: Tensor, ctx_flat: Tensor, act: Tensor, s_c: Tensor) -> Tensor:
+        """Same as denoise (clamped) but with the K context frames already stacked on the channel axis
+        [B, K*3, H, W]: the interface of the exported ONNX graph."""
+        B, KC, H, W = ctx_flat.shape
+        return self.denoise(x, sigma, ctx_flat.view(B, KC // x.shape[1], x.shape[1], H, W), act, s_c)
+
     # -------------------------------------------------------------- training
     def augment_context(self, ctx: Tensor) -> Tuple[Tensor, Tensor]:
         """Noise the context frames with a per-sample level sigma_c ~ U(0, ctx_noise_max) (prob ctx_noise_prob)."""

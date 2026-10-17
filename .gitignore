@@ -14,3 +14,5 @@ tests/fixtures/
 .pytest_cache/
 *.onnx.data
 media/frames/
+runs/
+tools/bench_models/
