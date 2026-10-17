@@ -13,8 +13,12 @@ v2 is the fallback and stays reproducible (`git checkout v2-final`; `game/spec_v
 | Flat-wall metric + pre-registered evaluation | DONE | `model/flatwall.py`, `eval_prereg.py`, `tools/flatwall_justify.py`; constants justified on 32 v2 episodes (M4): `results/prereg_full1_m4_32ep.*`, `results/flatwall_justification_full1_m4_32ep.json` |
 | Game v3 (position tint + 4 face shades), Python/JS twins | DONE | `game/spec_v3.json`, `tests/test_game_v3.py`, parity 100.0000% / max diff 0 for v2 and v3 (`results/game_parity*.json`) |
 | Design evidence (no model) | DONE | `results/signature_design_v3.json`, `results/observability_v2_v3.json` |
-| `docs/PREREG-v3.md` committed before any v3 training | see git log | |
-| ALICE: baselines, ablation (a) v2/K8, (b) v3/K4, (c) v3/K8 at 20k steps, then the full run | not started | RUNS.md |
+| `docs/PREREG-v3.md` committed before any v3 training | DONE (5b3f468, 20:54; two logged additions: fbb6155, a37d694) | `git log docs/PREREG-v3.md` |
+| ALICE smoke (v3, K = 8) | DONE: found and fixed the "final_ema.pt does not record the game" bug | job 5247835, RUNS.md row 13 |
+| ALICE: v2 baselines under the pre-registered protocol (64 episodes x 512 frames) | DONE | job 5247836, RUNS.md row 14, `results/prereg_w2_B.json`, `results/prereg_full1.json` |
+| ALICE: ablation (a) v2/K8 (5247837), (b) v3/K4 (5247838), (c) v3/K8 (5247839), 20k steps each | running | RUNS.md (row to be added) |
+| Full run of the selected variant (`full2`), adoption rule | not started | |
+| Site and tools take K from the model meta (tested with a random K = 8 model) | DONE | `tools/site_smoke.mjs --root <dir>`, 15/15 for K = 4 and K = 8 |
 
 Decisions (v3):
 * **D12. The collapse metric has a persistence window.** The real game is flat-wall (no floor/ceiling visible) in 23% of its frames, so the
