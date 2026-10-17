@@ -74,6 +74,11 @@ def _load_abs(p):
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def fmt_frames(x):
+    """A frame count that may be a half (the median of an even number of episodes): 14 -> '14', 15.5 -> '15.5'."""
+    return f"{x:.1f}".rstrip("0").rstrip(".") if abs(x - round(x)) > 1e-9 else str(int(round(x)))
+
+
 def v3_section(res=None):
     """The v3 iteration (docs/PREREG-v3.md): ablation, full run and the verdict of the pre-registered adoption rule, from the saved
     evaluations (results/prereg_*.json, prereg_ablation.json, prereg_final_*.json). Empty if the ablation has not been evaluated."""
@@ -88,7 +93,7 @@ def v3_section(res=None):
 
     def row(r, label=None):
         lo, hi = r["collapse_ci95"]
-        return [label or r["name"], r["game"], r["K"], f"{r['steps']:,}" if r.get("steps") else "", f"{r['horizon_median']:.0f} ({r['horizon_p25']:.0f} to {r['horizon_p75']:.0f})",
+        return [label or r["name"], r["game"], r["K"], f"{r['steps']:,}" if r.get("steps") else "", f"{fmt_frames(r['horizon_median'])} ({fmt_frames(r['horizon_p25'])} to {fmt_frames(r['horizon_p75'])})",
                 f"{r['collapse']:.3f} ({lo:.2f} to {hi:.2f})", f"{r['collapse_window1']:.3f}", f"{r['dream_flat_share']:.2f} / {r['real_flat_share']:.2f}",
                 f1(r["spin_return_psnr"]), f"{r['one_step_psnr']:.1f} ({r['copy_last_psnr']:.1f})", f1(r["mean_psnr_first32"])]
     head = ["run", "game", "K", "steps", "median frames until < 20 dB (middle half)", "collapse rate (95% interval)", "single-frame collapse rate",
@@ -132,7 +137,7 @@ def v3_section(res=None):
                    + table(head, [row(ref, ref["name"] + " (v2, shipped before)"), row(new)])
                    + f"\n\nThe rule: adopt only if the collapse rate is at most half of {ref['name']}'s **and** the median tracking horizon is not shorter. "
                    f"Collapse rate {new['collapse']:.3f} against {ref['collapse']:.3f} (ratio {fin['collapse_ratio']:.2f}, paired 95% interval {lo:.2f} to {hi:.2f}): "
-                   f"{'met' if ad['A_collapse_at_most_half'] else 'not met'}. Median horizon {new['horizon_median']:.0f} against {ref['horizon_median']:.0f} frames "
+                   f"{'met' if ad['A_collapse_at_most_half'] else 'not met'}. Median horizon {fmt_frames(new['horizon_median'])} against {fmt_frames(ref['horizon_median'])} frames "
                    f"(difference {fin['horizon_median_difference']:+.0f}, paired 95% interval {dlo:+.0f} to {dhi:+.0f}): {'met' if ad['B_horizon_not_shorter'] else 'not met'}.")
         if ad["adopt"]:
             out.append("**The v3 model met the pre-registered rule, so the demo ships it.** What still fails is reported in the limits below; PSNR levels are not comparable across the two games "
@@ -145,7 +150,53 @@ def v3_section(res=None):
                        f"PSNR levels are not comparable across the two games (copy-last-frame baseline {ref['copy_last_psnr']:.1f} dB in v2 and {new['copy_last_psnr']:.1f} dB in v3; "
                        f"unrelated-frame floor {ref['unrelated_frame_psnr']:.1f} and {new['unrelated_frame_psnr']:.1f} dB).")
         out.append(f"Sources: `results/prereg_*.json` (`eval_prereg.py`), `results/prereg_ablation.json` and `results/prereg_final_{new['name']}_vs_{ref['name']}.json` (`tools/compare_prereg.py`); RUNS.md.")
+    out.extend(_v3_exploratory(res))
     return "\n\n".join(out)
+
+
+def _v3_exploratory(res):
+    """Exploratory tables (declared in the deviation log of docs/PREREG-v3.md), from whatever files exist: flat-spell statistics, the
+    learning curve over the milestone checkpoints, and the flat-wall escape diagnostic."""
+    out = []
+    sp = _load_abs(res / "flat_spells.json")
+    if sp:
+        rows = [["real game", f"{sp['real_game']['share_of_frames_flat']:.2f}", fmt_frames(sp["real_game"]["median_length"]), str(sp["real_game"]["longest"]),
+                 f"{100 * sp['real_game']['chance_of_leaving_per_flat_frame']:.2f}%"]]
+        for n, v in sp["runs"].items():
+            d = v["dream"]
+            rows.append([n, f"{d['share_of_frames_flat']:.2f}", fmt_frames(d["median_length"]), str(d["longest"]), f"{100 * d['chance_of_leaving_per_flat_frame']:.2f}%"])
+        out.append("**Exploratory: how long does the dream stay on a flat wall?** From the saved per-frame arrays, frames 64 to 512 (a flat spell is a run of frames with at most 5% floor or ceiling pixels):\n\n"
+                   + table(["", "share of frames flat", "median spell (frames)", "longest spell", "chance of leaving a flat wall in a given frame"], rows)
+                   + "\n\nThe collapse is mostly a failure to leave: the real game leaves a flat wall in about 1 frame in 16, the dream far less often, and training makes the biggest difference. Source: `results/flat_spells.json` (`tools/flat_spells.py`).")
+    curve = {}
+    for kind in ("full1", "full2"):
+        for f in sorted(res.glob(f"prereg_{kind}_s*.json")):
+            step = int(f.stem.rsplit("_s", 1)[1])
+            j = _load_abs(f)
+            curve.setdefault(step, {})[kind] = (j["collapse"]["rate"], j["tracking_horizon_20db"]["median"])
+    for kind in ("full1", "full2"):
+        f = res / f"prereg_{kind}.json"
+        j = _load_abs(f)
+        if j and j.get("step"):
+            curve.setdefault(int(j["step"]), {})[kind] = (j["collapse"]["rate"], j["tracking_horizon_20db"]["median"])
+    if curve:
+        kinds = [k for k in ("full1", "full2") if any(k in v for v in curve.values())]
+        names = {"full1": "v2 (`full1`)", "full2": "v3 (`full2`)"}
+        rows = [[f"{st:,}"] + [(f"{curve[st][k][0]:.3f} / {fmt_frames(curve[st][k][1])}" if k in curve[st] else "") for k in kinds] for st in sorted(curve)]
+        out.append("**Exploratory: the learning curve of the collapse.** Collapse rate / median tracking horizon of the EMA checkpoints saved every 20k steps (same protocol, 64 episodes x 512 frames):\n\n"
+                   + table(["training steps"] + [names[k] for k in kinds], rows)
+                   + "\n\nThe collapse rate falls steadily with training in v2, so a 20k-step comparison understates what 150k steps do and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json`.")
+    esc = []
+    for label, path in (("w2_B (v2, 20k)", "prereg_w2_B.json"), ("v3k4 (v3, 20k)", "prereg_v3k4.json"), ("full1 (v2, 150k)", "prereg_full1.json"), ("full2 (v3, 150k)", "prereg_full2.json")):
+        j = _load_abs(res / path)
+        fe = j.get("flat_escape") if j else None
+        if fe and "dream_psnr_at" in fe:
+            esc.append([label, f1(fe["dream_psnr_at"]["8"]), f1(fe["dream_psnr_at"]["16"]), f1(fe["dream_psnr_at"]["24"]), f"{100 * fe['dream_flat_share_at_end']:.0f}% / {100 * fe['real_flat_share_at_end']:.0f}%"])
+    if esc:
+        out.append("**Exploratory: flat-wall escape.** Start facing a wall closely with identical context frames and hold *turn right* for 24 frames; the real game turns away and shows what is around the corner. "
+                   "PSNR against the real game, and the share of dreams still on a flat wall at frame 24 (dream / real):\n\n"
+                   + table(["model", "PSNR @8", "@16", "@24", "still flat at frame 24"], esc))
+    return out
 
 
 def v3_glance(res=None):

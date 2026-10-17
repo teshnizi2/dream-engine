@@ -204,12 +204,48 @@ A model-free check on rendered frames (nearest-neighbour pose recovery from flat
 
 | run | game | K | steps | median frames until < 20 dB (middle half) | collapse rate (95% interval) | single-frame collapse rate | flat-wall share dream / real | 360 degree spin return, dB | 1-step PSNR dB (copy-last) | mean PSNR, first 32 frames | collapse rate relative to the baseline (paired 95% interval) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| w2_B (baseline) | v2 | 4 | 20,000 | 14 (6 to 26) | 0.667 (0.61 to 0.72) | 0.620 | 0.84 / 0.25 | 15.1 | 31.4 (24.2) | 21.2 | 1 |
-| v2k8 | v2 | 8 | 20,000 | 14 (5 to 24) | 0.670 (0.61 to 0.73) | 0.616 | 0.83 / 0.25 | 15.3 | 31.4 (24.2) | 21.0 | 1.00 (0.92 to 1.09) |
-| v3k4 | v3 | 4 | 20,000 | 16 (7 to 27) | 0.542 (0.48 to 0.61) | 0.554 | 0.76 / 0.25 | 15.2 | 31.8 (24.7) | 21.7 | 0.81 (0.72 to 0.90) |
-| v3k8 | v3 | 8 | 20,000 | 13 (7 to 28) | 0.498 (0.43 to 0.57) | 0.511 | 0.71 / 0.25 | 14.8 | 31.8 (24.7) | 21.5 | 0.75 (0.65 to 0.85) |
+| w2_B (baseline) | v2 | 4 | 20,000 | 14 (5.8 to 25.5) | 0.667 (0.61 to 0.72) | 0.620 | 0.84 / 0.25 | 15.1 | 31.4 (24.2) | 21.2 | 1 |
+| v2k8 | v2 | 8 | 20,000 | 13.5 (5 to 23.5) | 0.670 (0.61 to 0.73) | 0.616 | 0.83 / 0.25 | 15.3 | 31.4 (24.2) | 21.0 | 1.00 (0.92 to 1.09) |
+| v3k4 | v3 | 4 | 20,000 | 15.5 (7 to 27) | 0.542 (0.48 to 0.61) | 0.554 | 0.76 / 0.25 | 15.2 | 31.8 (24.7) | 21.7 | 0.81 (0.72 to 0.90) |
+| v3k8 | v3 | 8 | 20,000 | 13 (7 to 28.2) | 0.498 (0.43 to 0.57) | 0.511 | 0.71 / 0.25 | 14.8 | 31.8 (24.7) | 21.5 | 0.75 (0.65 to 0.85) |
 
 Selection rule (fixed in advance): 1 of 3 variants have a median horizon of at least the baseline's (14.0); collapse rates within 0.02 of the lowest (0.542): ['v3k4']; chosen: v3k4.
+
+**Exploratory: how long does the dream stay on a flat wall?** From the saved per-frame arrays, frames 64 to 512 (a flat spell is a run of frames with at most 5% floor or ceiling pixels):
+
+|  | share of frames flat | median spell (frames) | longest spell | chance of leaving a flat wall in a given frame |
+|---|---|---|---|---|
+| real game | 0.25 | 9 | 282 | 6.30% |
+| w2_B | 0.84 | 99 | 449 | 0.46% |
+| v2k8 | 0.83 | 83 | 449 | 0.47% |
+| v3k4 | 0.76 | 35 | 449 | 0.98% |
+| v3k8 | 0.71 | 25 | 449 | 1.00% |
+| full1 | 0.49 | 18 | 449 | 3.26% |
+
+The collapse is mostly a failure to leave: the real game leaves a flat wall in about 1 frame in 16, the dream far less often, and training makes the biggest difference. Source: `results/flat_spells.json` (`tools/flat_spells.py`).
+
+**Exploratory: the learning curve of the collapse.** Collapse rate / median tracking horizon of the EMA checkpoints saved every 20k steps (same protocol, 64 episodes x 512 frames):
+
+| training steps | v2 (`full1`) |
+|---|---|
+| 20,000 | 0.602 / 15 |
+| 40,000 | 0.431 / 14 |
+| 60,000 | 0.411 / 14 |
+| 80,000 | 0.269 / 14.5 |
+| 100,000 | 0.227 / 16 |
+| 120,000 | 0.186 / 16 |
+| 140,000 | 0.202 / 16.5 |
+| 150,000 | 0.159 / 20 |
+
+The collapse rate falls steadily with training in v2, so a 20k-step comparison understates what 150k steps do and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json`.
+
+**Exploratory: flat-wall escape.** Start facing a wall closely with identical context frames and hold *turn right* for 24 frames; the real game turns away and shows what is around the corner. PSNR against the real game, and the share of dreams still on a flat wall at frame 24 (dream / real):
+
+| model | PSNR @8 | @16 | @24 | still flat at frame 24 |
+|---|---|---|---|---|
+| w2_B (v2, 20k) | 22.4 | 16.8 | 15.6 | 41% / 17% |
+| v3k4 (v3, 20k) | 23.0 | 17.0 | 15.4 | 41% / 17% |
+| full1 (v2, 150k) | 24.4 | 18.0 | 16.4 | 22% / 17% |
 
 ## How to run
 

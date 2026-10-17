@@ -64,3 +64,23 @@ def test_the_limits_bullet_names_the_shipped_models_collapse_and_the_fate_of_v3(
     b = F.v3_limit(tmp_path)
     assert "not fixed" not in b and "reduced" in b and "stuck" in b
     assert F.v3_limit(tmp_path / "nowhere") == ""
+
+
+def test_the_v3_section_adds_the_exploratory_tables_when_their_files_exist(tmp_path):
+    import fill_readme as F
+    populate(tmp_path, adopt=False)
+    (tmp_path / "flat_spells.json").write_text(json.dumps({
+        "frames_from": 64, "real_game": {"share_of_frames_flat": 0.249, "n_spells": 467, "median_length": 9.0, "longest": 282, "chance_of_leaving_per_flat_frame": 0.063},
+        "runs": {"w2_B": {"dream": {"share_of_frames_flat": 0.84, "n_spells": 167, "median_length": 99.0, "longest": 449, "chance_of_leaving_per_flat_frame": 0.0046}}}}))
+    from tests.test_compare_prereg import fake_eval
+    for st in (20000, 40000):
+        fake_eval(tmp_path, f"full1_s{st}", 4, "v2", horizon_drop=12, collapse_from=60)
+        fake_eval(tmp_path, f"full2_s{st}", 4, "v3", horizon_drop=14, collapse_from=200)
+    text = F.v3_section(tmp_path)
+    assert "chance of leaving" in text.lower() and "0.46%" in text and "6.30%" in text
+    assert "20,000" in text and "40,000" in text and "learning curve" in text.lower()
+
+
+def test_a_median_between_two_integers_is_not_rounded_away():
+    import fill_readme as F
+    assert F.fmt_frames(15.5) == "15.5" and F.fmt_frames(14.0) == "14" and F.fmt_frames(13.25) == "13.2"
