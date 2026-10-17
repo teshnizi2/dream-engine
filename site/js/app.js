@@ -20,6 +20,7 @@ const frameHist = [];                              // last K real frames (CHW fl
 const actHist = [];                                // actions that produced them
 let steps = 3, framesSince = 0, paused = false, ready = false, autoplay = false, tourIdx = 0, tour = [];
 let autowake = qs.get('autowake') === '1';
+let flash = 0;                                      // capture mode: frames left of the wake-up flash (deterministic, unlike a CSS animation)
 const AUTOWAKE_FRAMES = 60;                         // 2 s at the 30 Hz game tick
 const psnrHist = [];
 const wakeMarks = [];                              // indexes into psnrHist where the dream was (re)seeded from the real game
@@ -99,7 +100,8 @@ function resetReal() {
 function wake() {
   dream.reset(frameHist, actHist);
   framesSince = 0; wakeMarks.push(psnrHist.length);
-  const p = $('panel-dream'); p.classList.remove('woke'); void p.offsetWidth; p.classList.add('woke');
+  const p = $('panel-dream');
+  if (CAPTURE) flash = 7; else { p.classList.remove('woke'); void p.offsetWidth; p.classList.add('woke'); }
   updateReadouts();
   drawDrift();
 }
@@ -116,6 +118,7 @@ async function tick(action) {
   if (psnrHist.length > 400) { psnrHist.shift(); for (let i = 0; i < wakeMarks.length; i++) wakeMarks[i]--; while (wakeMarks.length && wakeMarks[0] < 0) wakeMarks.shift(); }
   drawRgb(ctxReal, imgReal, realRGB);
   drawRgb(ctxDream, imgDream, out.rgb);
+  if (CAPTURE) $('panel-dream').classList.toggle('flash', flash-- > 0);
   const now = performance.now();
   tickTimes.push(now); while (tickTimes.length && now - tickTimes[0] > 1000) tickTimes.shift();
   emaMs = emaMs ? emaMs * 0.85 + out.ms * 0.15 : out.ms;

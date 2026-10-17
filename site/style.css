@@ -237,6 +237,8 @@ body.capture .keys-cluster { grid-template-columns: repeat(3, 56px); gap: 8px; }
 body.capture .keys-cluster .key { height: 52px; font-size: 18px; }
 body.capture .keys-note { display: block; font-size: 15px; max-width: 24ch; text-align: left; }
 body.capture .key { transition: none; }
+body.capture .panel.dream.flash { border-color: var(--amber); box-shadow: 0 0 0 2px rgba(245,158,11,.95), 0 0 80px 10px rgba(245,158,11,.5); }
+body.capture .panel, body.capture .btn { transition: none; }
 body.capture .deck { grid-template-columns: repeat(4, 1fr); gap: 10px; }
 body.capture .cell.wide { grid-column: span 2; }
 body.capture .val { font-size: 25px; }
