@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { startServer, rootFromArgs } from './serve.mjs';
+import { captionFor } from './caption.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = rootFromArgs(path.resolve(here, '..'));
@@ -31,8 +32,11 @@ const t0 = Date.now();
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
+  const wakeEvery0 = +(args['wake-every'] || 0), wakeUntil0 = +(args['wake-until'] || Infinity);
+  const caption = args.note || captionFor(wakeEvery0, FPS, wakeUntil0);          // derived from the settings unless a caption is given by hand
+  console.log('caption:', caption);
   const q = new URLSearchParams({ capture: '1', steps: args.steps || '3', seed: args.seed || '1234', ...(args.dtype ? { dtype: args.dtype } : {}),
-    ...(args.ms ? { ms: args.ms } : {}), ...(args.note ? { note: args.note } : {}), ...(SQUARE ? { square: '1' } : {}), ...(args['fps-label'] ? { fps: args['fps-label'] } : {}) });
+    ...(args.ms ? { ms: args.ms } : {}), note: caption, ...(SQUARE ? { square: '1' } : {}), ...(args['fps-label'] ? { fps: args['fps-label'] } : {}) });
   page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 200)));
   await page.goto(`http://127.0.0.1:${srv.port}/site/index.html?${q}`);
   await page.waitForFunction('window.__captureReady === true', { timeout: 180000 });
