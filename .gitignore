@@ -1,0 +1,16 @@
+.venv/
+vendor/
+data/raw/
+data/cache/
+__pycache__/
+*.pyc
+node_modules/
+checkpoints/
+*.ckpt
+*.pt
+.DS_Store
+site/models/*.data
+tests/fixtures/
+.pytest_cache/
+*.onnx.data
+media/frames/

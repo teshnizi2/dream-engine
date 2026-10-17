@@ -1,0 +1,35 @@
+{
+ "script": "tests/parity.test.mjs + tests/make_parity_fixture.py",
+ "fixture_seed": 1234,
+ "trajectories": {
+  "frames": 808,
+  "identical_pixel_pct": 100,
+  "max_abs_diff": 0
+ },
+ "max_state_diff_after_100_steps": 0,
+ "random poses": {
+  "frames": 300,
+  "identical_pixel_pct": 100,
+  "max_abs_diff": 0
+ },
+ "edge 0": {
+  "frames": 1,
+  "identical_pixel_pct": 100,
+  "max_abs_diff": 0
+ },
+ "edge 1": {
+  "frames": 1,
+  "identical_pixel_pct": 100,
+  "max_abs_diff": 0
+ },
+ "edge 2": {
+  "frames": 1,
+  "identical_pixel_pct": 100,
+  "max_abs_diff": 0
+ },
+ "edge 3": {
+  "frames": 1,
+  "identical_pixel_pct": 100,
+  "max_abs_diff": 0
+ }
+}

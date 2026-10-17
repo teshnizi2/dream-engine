@@ -1,0 +1,10 @@
+{
+ "script": "python -m data.coverage",
+ "samples": 25600,
+ "open_cells": 119,
+ "cells_with_zero_samples": 0,
+ "min_cell_share_vs_uniform": 0.6321875000000001,
+ "max_cell_share_vs_uniform": 1.626953125,
+ "normalised_entropy": 0.9954435471628381,
+ "heading_bins_empty_fraction": 0.0
+}

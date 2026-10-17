@@ -1,0 +1,7 @@
+{
+ "script": "python -m data.loader --bench",
+ "frames_per_sec_single_process_B32": 1598.5655622670208,
+ "frames_per_sec_single_process_B128": 1698.7416403081013,
+ "frames_per_sec_single_process_B512": 1622.0800716183073,
+ "render_only_frames_per_sec_B512": 1864.8492010449747
+}

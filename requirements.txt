@@ -1,0 +1,12 @@
+# pinned from the working .venv (Python 3.12.13, macOS arm64); the ALICE env uses the same versions on Linux
+torch==2.14.1
+numpy==2.5.4
+pillow==13.0.0
+matplotlib==3.11.2
+imageio==2.38.1
+onnx==1.23.2
+onnxruntime==1.31.0
+onnxscript==0.7.2
+onnxconverter-common==1.16.0
+pytest==9.1.1
+tqdm==4.70.1
