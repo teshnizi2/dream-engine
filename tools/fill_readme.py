@@ -95,15 +95,15 @@ def build(a):
         tok["TOTAL_GPUH"] = f"{train['total_gpu_hours']:.1f}"
     if fps:
         by = {r["steps"]: r for r in fps["runs"]}
-        tok["FPS3"] = f"{by[3]['fps_counted']:.0f}"
-        tok["FPS1"] = f"{by[1]['fps_counted']:.0f}"
+        tok["FPS3"] = f"{fps['summary']['3']['fps_counted_median']:.0f}"
+        tok["FPS1"] = f"{fps['summary']['1']['fps_counted_median']:.0f}"
     sections = []
     # ---- 1-step
     s = ev["one_step_samplers_ctx0.1"]
     cp = ev["baseline_copy_last_frame"]
     ms = {}
     if fps:
-        ms = {1: by[1], 2: by[2], 3: by[3]}
+        ms = {k: {"ms_per_frame_median": fps["summary"][str(k)]["ms_per_frame_median"]} for k in (1, 2, 3)}
     rows = [["copy the last frame (baseline)", f1(cp["psnr"]), f"{cp['ssim']:.3f}", "0", ""]]
     for name, label, steps in (("euler1", "Euler, 1 step", 1), ("euler2", "Euler, 2 steps", 2), ("euler3", "Euler, 3 steps (DIAMOND)", 3)):
         rows.append([label, f1(s[name]["psnr"]), f"{s[name]['ssim']:.3f}", s[name]["nfe"],
@@ -122,12 +122,23 @@ def build(a):
     rows = [["dream (PSNR dB)"] + [f1(ro["psnr_at"][k]) for k in ks],
             ["dream (SSIM)"] + [f"{ro['ssim_at'][k]:.2f}" for k in ks],
             ["freeze the last real frame (PSNR dB)"] + [f1(fz[k]) for k in ks]]
+    cfg = ro.get("config") or {"steps": 3, "init": "edm", "ctx_sigma": ev.get("chosen_ctx_sigma")}
+    extra = []
+    if "frames_until_psnr_below_20db" in ro:
+        extra.append(f"* the mean PSNR falls below 20 dB after **{ro['frames_until_psnr_below_20db']} frames** (below 25 dB after {ro['frames_until_psnr_below_25db']}); "
+                     f"frames 129-{ro['horizon']} are as unlike the real game as an unrelated frame")
+    if "sharpness_ratio_last32" in ro:
+        extra.append(f"* late frames keep **{100 * ro['sharpness_ratio_last32']:.0f}%** of the real frames' edge sharpness (mean gradient magnitude, last 32 frames; 100% = as sharp as the real game)")
+    if "spin_360" in ev:
+        sp = ev["spin_360"]
+        extra.append(f"* hold *turn right* for a full 360 degrees (72 frames): the real game ends on exactly the start view ({sp['real_frame72_vs_start_view_psnr']:.0f} dB), "
+                     f"the dream's frame 72 matches the start view at only **{sp['dream_frame72_vs_start_view_psnr']:.1f} dB** (it has no map memory to close the loop)")
     sections.append("### Drift: pure imagination against the true game\n\n"
                     f"Rollouts of {ro['horizon']} frames from 4 real frames, {ro['episodes']} episodes (exploration-policy actions), "
-                    f"Euler 3 steps, context noise {ev['chosen_ctx_sigma']}. An unrelated frame scores about "
+                    f"Euler {cfg['steps']} step(s), init `{cfg['init']}`, context noise {cfg['ctx_sigma']}. An unrelated frame scores about "
                     f"{ev['baseline_unrelated_frame_psnr']:.1f} dB, so the dream follows the real game for roughly the first "
                     "8-16 frames (a quarter to half a second) and then wanders to a different place.\n\n"
-                    + table(["frames since wake-up"] + ks, rows) + "\n\n![drift](media/drift.png)")
+                    + table(["frames since wake-up"] + ks, rows) + "\n\n" + "\n".join(extra) + "\n\n![drift](media/drift.png)")
     if "validity_nearest_real_frame_psnr" in ev:
         v = ev["validity_nearest_real_frame_psnr"]
         sections.append("### Is it still a game frame?\n\n"
@@ -164,12 +175,19 @@ def build(a):
                         + table(["precision", "size MB", "max abs diff, ONNX Runtime CPU", "max abs diff, WebGPU in the browser"], rows)
                         + "\n\nOutputs are in [-1, 1]; 1 grey level = 0.0078. Sources: `" + a.onnx + "`, `results/onnx_browser_verification.json`.")
     if fps:
-        rows = [[r["steps"], f"{r['ms_per_frame_median']:.1f}", f"{r['fps_counted']:.1f}", f"{r['gpu_util_before_pct']} / {r['gpu_util_after_pct']}"] for r in fps["runs"]]
+        sm = fps["summary"]
+        rows = []
+        for st in ("1", "2", "3"):
+            rs = [r for r in fps["runs"] if str(r["steps"]) == st]
+            lo = min(min(r["gpu_util_before_pct"], r["gpu_util_after_pct"]) for r in rs)
+            hi = max(max(r["gpu_util_before_pct"], r["gpu_util_after_pct"]) for r in rs)
+            rows.append([st, f"{sm[st]['ms_per_frame_median']:.1f}", f"{sm[st]['fps_counted_median']:.0f}", f"{sm[st]['ms_per_frame_best']:.1f}",
+                         f"{sm[st]['fps_counted_best']:.0f}", f"{lo}-{hi}", sm[st]["windows"]])
         sections.append("### Speed in the browser (Apple M4, headless Edge, WebGPU fp16 with graph capture)\n\n"
-                        + table(["denoising steps", "ms per frame (model)", "frames per second (counted)", "GPU busy before / after (%)"], rows)
-                        + "\n\nThe game tick is capped at 30 per second. **The M4's GPU was shared with other builders' jobs during these "
-                        "runs** (last column, from `ioreg`), so these are conservative; on a quiet GPU the model alone took "
-                        f"about {fps.get('quiet_ms_note', 'less')}. The WASM fallback measured a few frames per second. Source: `{a.fps}`.")
+                        + table(["denoising steps", "ms per frame, median window", "fps, median window", "ms per frame, best window", "fps, best window", "GPU busy (%) around the windows", "windows"], rows)
+                        + "\n\nThe game tick is capped at 30 per second, so the best windows read 30 fps. **The M4's GPU was shared with other jobs on this machine during all "
+                        "runs** (the busy column comes from `ioreg`), which is why the median windows are slower than the best ones; a quiet GPU should behave like the best windows. "
+                        f"Source: `{a.fps}` (`tools/browser_fps.mjs`).")
     text = pathlib.Path(ROOT / "README.template.md").read_text()
     text = text.replace("@@RESULTS_TABLES@@", "\n\n".join(sections))
     text = text.replace("@@ABLATIONS@@", ablation_tables())
