@@ -95,3 +95,13 @@ def test_the_signature_reliance_table_lists_the_v3_checkpoints(tmp_path):
             "true_signature": {"dream_psnr_at": {"8": 23.0, "16": 17.0}}, "shifted_signature": {"dream_psnr_at": {"8": 22.6, "16": 16.4}}}))
     text = F.v3_section(tmp_path)
     assert "signature" in text.lower() and "60,000" in text and "150,000" in text and "0.90" in text
+
+
+def test_a_negative_result_says_what_it_does_and_does_not_show(tmp_path):
+    import fill_readme as F
+    populate(tmp_path, adopt=False)
+    text = F.v3_section(tmp_path)
+    assert "What this does and does not show" in text
+    assert "single training run" in text and "between training runs" in text
+    populate(tmp_path, adopt=True)
+    assert "What this does and does not show" not in F.v3_section(tmp_path)

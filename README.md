@@ -16,6 +16,7 @@ imagining every frame from the same keypresses, with no game code.
 * One step ahead it is **34.0 dB** (copy-the-last-frame gets 23.9 dB). Left to dream, it **tracks the real game for about 16 frames** (median of 64 episodes, middle half 8 to 30 frames; PSNR above 20 dB, 5-frame average), then wanders into a different, still game-like place: **18.5 dB after 32 frames, 14.0 dB after 128** (an unrelated frame scores 12.0 dB).
 * All 8 hold-one-key tests (move, strafe, turn and the arcs) beat "freeze the last frame" after 8 frames; the smallest margin is 4.9 dB (back). A full 360 degree spin does **not** return to the starting view (18.0 dB): no map memory.
 * The biggest lesson: the bottleneck was the game, not the network (see "What was tried").
+* A pre-registered attempt to fix the collapse onto flat wall views (v3: every wall face gets its own colour signature, plus a longer context) **did not meet its adoption rule**: collapse rate 0.33 against 0.16, median tracking horizon 19 against 20 frames (64 episodes x 512 frames, same protocol); v2 stays shipped and v3 is documented as a negative result (see "What was tried").
 
 ## What it is
 
@@ -211,6 +212,19 @@ A model-free check on rendered frames (nearest-neighbour pose recovery from flat
 
 Selection rule (fixed in advance): 1 of 3 variants have a median horizon of at least the baseline's (14.0); collapse rates within 0.02 of the lowest (0.542): ['v3k4']; chosen: v3k4.
 
+**Full run and the adoption rule** (150,000 steps, the recipe of `full1`; both evaluated with the same code on the same 64 episodes):
+
+| run | game | K | steps | median frames until < 20 dB (middle half) | collapse rate (95% interval) | single-frame collapse rate | flat-wall share dream / real | 360 degree spin return, dB | 1-step PSNR dB (copy-last) | mean PSNR, first 32 frames |
+|---|---|---|---|---|---|---|---|---|---|---|
+| full1 (v2, shipped before) | v2 | 4 | 150,000 | 20 (10.5 to 33) | 0.159 (0.13 to 0.20) | 0.346 | 0.49 / 0.25 | 15.0 | 34.1 (24.2) | 23.3 |
+| full2 | v3 | 4 | 150,000 | 19 (10.8 to 38) | 0.332 (0.27 to 0.40) | 0.429 | 0.60 / 0.25 | 15.5 | 34.4 (24.7) | 24.0 |
+
+The rule: adopt only if the collapse rate is at most half of full1's **and** the median tracking horizon is not shorter. Collapse rate 0.332 against 0.159 (ratio 2.09, paired 95% interval 1.72 to 2.56): not met. Median horizon 19 against 20 frames (difference -1, paired 95% interval -4 to +5): not met.
+
+**v3 did not meet the pre-registered rule (the collapse rate was not at most half and the tracking horizon got shorter), so v2 stays shipped.** This is a negative result for the observability fix as tried here (one training run per variant, this signature design, this budget); the code, the game and all the numbers above are in the repository. PSNR levels are not comparable across the two games (copy-last-frame baseline 24.2 dB in v2 and 24.7 dB in v3; unrelated-frame floor 12.5 and 12.8 dB).
+
+Sources: `results/prereg_*.json` (`eval_prereg.py`), `results/prereg_ablation.json` and `results/prereg_final_full2_vs_full1.json` (`tools/compare_prereg.py`); RUNS.md.
+
 **Exploratory: how long does the dream stay on a flat wall?** From the saved per-frame arrays, frames 64 to 512 (a flat spell is a run of frames with at most 5% floor or ceiling pixels):
 
 |  | share of frames flat | median spell (frames) | longest spell | chance of leaving a flat wall in a given frame |
@@ -221,23 +235,42 @@ Selection rule (fixed in advance): 1 of 3 variants have a median horizon of at l
 | v3k4 | 0.76 | 35 | 449 | 0.98% |
 | v3k8 | 0.71 | 25 | 449 | 1.00% |
 | full1 | 0.49 | 18 | 449 | 3.26% |
+| full2 | 0.60 | 18 | 449 | 1.99% |
 
 The collapse is mostly a failure to leave: the real game leaves a flat wall in about 1 frame in 16, the dream far less often, and training makes the biggest difference. Source: `results/flat_spells.json` (`tools/flat_spells.py`).
 
 **Exploratory: the learning curve of the collapse.** Collapse rate / median tracking horizon of the EMA checkpoints saved every 20k steps (same protocol, 64 episodes x 512 frames):
 
-| training steps | v2 (`full1`) |
-|---|---|
-| 20,000 | 0.602 / 15 |
-| 40,000 | 0.431 / 14 |
-| 60,000 | 0.411 / 14 |
-| 80,000 | 0.269 / 14.5 |
-| 100,000 | 0.227 / 16 |
-| 120,000 | 0.186 / 16 |
-| 140,000 | 0.202 / 16.5 |
-| 150,000 | 0.159 / 20 |
+| training steps | v2 (`full1`) | v3 (`full2`) |
+|---|---|---|
+| 20,000 | 0.602 / 15 | 0.572 / 12.5 |
+| 40,000 | 0.431 / 14 | 0.486 / 16 |
+| 60,000 | 0.411 / 14 | 0.416 / 17.5 |
+| 80,000 | 0.269 / 14.5 | 0.349 / 18.5 |
+| 100,000 | 0.227 / 16 | 0.352 / 20 |
+| 120,000 | 0.186 / 16 | 0.340 / 19 |
+| 140,000 | 0.202 / 16.5 | 0.314 / 19.5 |
+| 150,000 | 0.159 / 20 | 0.332 / 19 |
 
-The collapse rate falls steadily with training in v2, so a 20k-step comparison understates what 150k steps do and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json`.
+![collapse rate against training steps](media/collapse_curve.png)
+
+The collapse rate falls with training in v2, so a 20k-step comparison says little about 150k steps and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json` (`tools/render_collapse_curve.py`).
+
+**Exploratory: does a v3 model read the signature?** The flat-wall escape test is run in the v3 game and in a copy whose tint is shifted (a different position code on the same geometry); a model that only copies colours scores the same in both, one that reads the code as a position is misled and loses PSNR:
+
+| checkpoint | training steps | PSNR @8, true signature | PSNR @8, shifted signature | drop @8, dB | mean drop over 24 frames, dB |
+|---|---|---|---|---|---|
+| full2_s20000 | 20,000 | 22.2 | 22.1 | 0.14 | 0.13 |
+| v3k4 | 20,000 | 23.0 | 22.6 | 0.38 | 0.38 |
+| full2_s40000 | 40,000 | 23.4 | 23.2 | 0.21 | 0.16 |
+| full2_s60000 | 60,000 | 23.8 | 23.5 | 0.24 | 0.23 |
+| full2_s80000 | 80,000 | 24.2 | 23.6 | 0.59 | 0.46 |
+| full2_s100000 | 100,000 | 24.4 | 23.8 | 0.58 | 0.50 |
+| full2_s120000 | 120,000 | 24.5 | 23.5 | 0.99 | 0.71 |
+| full2_s140000 | 140,000 | 25.0 | 23.8 | 1.21 | 0.76 |
+| full2 | 150,000 | 24.9 | 23.8 | 1.08 | 0.85 |
+
+Source: `results/signature_use_<run>.json` (`tools/signature_use.py`).
 
 **Exploratory: flat-wall escape.** Start facing a wall closely with identical context frames and hold *turn right* for 24 frames; the real game turns away and shows what is around the corner. PSNR against the real game, and the share of dreams still on a flat wall at frame 24 (dream / real):
 
@@ -246,6 +279,9 @@ The collapse rate falls steadily with training in v2, so a 20k-step comparison u
 | w2_B (v2, 20k) | 22.4 | 16.8 | 15.6 | 41% / 17% |
 | v3k4 (v3, 20k) | 23.0 | 17.0 | 15.4 | 41% / 17% |
 | full1 (v2, 150k) | 24.4 | 18.0 | 16.4 | 22% / 17% |
+| full2 (v3, 150k) | 24.8 | 18.8 | 16.9 | 23% / 17% |
+
+**What this does and does not show.** At 20k steps the v3 game with K = 4 had lowered the collapse rate to 0.81 of the v2 baseline (paired 95% interval 0.72 to 0.90); at 150k it is 2.09 times v2's (paired interval 1.72 to 2.56). The v3 model does read the signature: shifting it costs 0.85 dB on average in the escape test at 150,000 steps, up from 0.13 dB at 20,000. A longer context on the unchanged game did nothing (ablation row `v2k8`). So with this design and budget the colour signature was used and did not stop the dream from collapsing onto flat walls; the data do not support "a close-up wall carries no information about where you are" as the (only) cause. They do not show that v3 *causes* more collapse, or that no other signature design would help: every row is a single training run, the intervals above cover the sampling of episodes but not the variation between training runs (the sign of the effect changed between 20k and 150k steps), and the collapse rate of v2 itself moves by several points between neighbouring checkpoints.  The one thing v3 seems to improve is tracking: the median tracking horizon of the v3 checkpoints is at least v2's at 6 of 7 milestones (from 40,000 steps on; the final models: 19 against 20 frames), and the mean PSNR over the first 32 frames of the final models is 24.0 against 23.3 dB (different games, so an observation, not a like-for-like comparison).
 
 ## How to run
 
@@ -272,6 +308,7 @@ Keys: WASD / arrows move and turn, Q/E strafe, R wake up, T dream only, P pause,
 
 * **One fixed map, 64x64 pixels.** Training and evaluation use the same maze and the same textures. Nothing was tested on other levels, so nothing here says the model generalises to them, and it is not a general game engine.
 * **It drifts.** Errors compound frame after frame: the dream tracks the real game (PSNR above 20 dB) for about the first 16 frames and then goes to a different place. It stays *game-like* (see the validity table) but is no longer the same place as the real panel, so "PSNR against the real game" stops being meaningful after that point. "Wake up" re-seeds it from the real game, and the page marks every wake-up on the drift chart.
+* **Long dreams collapse onto flat wall views (not fixed).** In 19% of frames 64 to 512 of a long dream the shipped model is stuck on a flat wall (no floor or ceiling for 32 frames in a row), against 7% for the real game's own path; the collapsed frames are smooth colour fields with far less structure than a real wall close-up. A pre-registered fix (v3: unique colour signatures on every wall face) did not meet its rule (collapse rate 0.33 against 0.16), so v2 stays shipped; a full 360 degree spin does not return to the start view either.
 * **It gets smoother over time.** Late in a long rollout the dreamed frames lose detail and settle on simple views (often a wall close-up): over the last 32 frames of the 512-frame rollouts they keep 47% of the real frames' edge sharpness. Edges are always softer than the real engine's pixel-exact ones, and thin features (window frames, brick joints, the rings on the pillar) are the first to blur.
 * **Human play was not tested.** Training data is a sticky random walk with wall avoidance, not human play. Strafing (Q/E) is the rarest action, and backing up and strafing are among the lowest-scoring controls in the hold-one-key test; spinning in place or pressing into walls for a long time is further from the training distribution.
 * **Small, single-run evidence.** One architecture trained at one scale; every comparison is a single run per setting, and differences below about 0.5 dB are within run-to-run noise (an extra 4k plain fine-tuning steps moved the rollout means by 0.4 dB), and the drift numbers depend on which episodes are drawn ("How stable are these numbers?"). Evaluation is on the game's own trajectories; there is no human study of how convincing it feels.

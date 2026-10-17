@@ -151,7 +151,46 @@ def v3_section(res=None):
                        f"unrelated-frame floor {ref['unrelated_frame_psnr']:.1f} and {new['unrelated_frame_psnr']:.1f} dB).")
         out.append(f"Sources: `results/prereg_*.json` (`eval_prereg.py`), `results/prereg_ablation.json` and `results/prereg_final_{new['name']}_vs_{ref['name']}.json` (`tools/compare_prereg.py`); RUNS.md.")
     out.extend(_v3_exploratory(res))
+    if fin and not fin["adoption"]["adopt"]:
+        out.append(_v3_reading(res, abl, fin))
     return "\n\n".join(out)
+
+
+def _v3_reading(res, abl, fin):
+    """What a not-adopted v3 does and does not show (numbers from the saved results; wording fixed by what the data allow)."""
+    new, ref = fin["new"], fin["ref"]
+    pv = abl.get("paired_vs_baseline", {}).get("v3k4")
+    early = (f"At 20k steps the v3 game with K = 4 had lowered the collapse rate to {pv['collapse_ratio']:.2f} of the v2 baseline (paired 95% interval {pv['collapse_ratio_ci95'][0]:.2f} to {pv['collapse_ratio_ci95'][1]:.2f}); "
+             "at 150k it is "
+             if pv else "At 150k it is ") + f"{fin['collapse_ratio']:.2f} times v2's (paired interval {fin['paired_ratio_ci95'][0]:.2f} to {fin['paired_ratio_ci95'][1]:.2f})."
+    su = [_load_abs(f) for f in sorted(res.glob("signature_use_*.json"))]
+    su = sorted([j for j in su if j and "psnr_drop_mean" in j], key=lambda j: j["step"])
+    reads = (f" The v3 model does read the signature: shifting it costs {su[-1]['psnr_drop_mean']:.2f} dB on average in the escape test at {su[-1]['step']:,} steps, up from {su[0]['psnr_drop_mean']:.2f} dB at {su[0]['step']:,}."
+             if len(su) > 1 else "")
+    return ("**What this does and does not show.** " + early + reads
+            + " A longer context on the unchanged game did nothing (ablation row `v2k8`). So with this design and budget the colour signature was used and did not stop the dream from collapsing onto flat walls; "
+              "the data do not support \"a close-up wall carries no information about where you are\" as the (only) cause. "
+              "They do not show that v3 *causes* more collapse, or that no other signature design would help: every row is a single training run, the intervals above cover the sampling of episodes but not the variation "
+              "between training runs (the sign of the effect changed between 20k and 150k steps), and the collapse rate of v2 itself moves by several points between neighbouring checkpoints. "
+              + _tracking_sentence(res))
+
+
+def _tracking_sentence(res):
+    """The one thing v3 did seem to improve, stated from the milestone files (empty-safe)."""
+    pairs = []
+    for f in sorted(res.glob("prereg_full2_s*.json")):
+        step = f.stem.rsplit("_s", 1)[1]
+        a, b = _load_abs(res / f"prereg_full1_s{step}.json"), _load_abs(f)
+        if a and b:
+            pairs.append((int(step), a["tracking_horizon_20db"]["median"], b["tracking_horizon_20db"]["median"]))
+    a, b = _load_abs(res / "prereg_full1.json"), _load_abs(res / "prereg_full2.json")
+    if not pairs or not (a and b):
+        return ""
+    ge = [p for p in pairs if p[2] >= p[1]]
+    return (f" The one thing v3 seems to improve is tracking: the median tracking horizon of the v3 checkpoints is at least v2's at {len(ge)} of {len(pairs)} milestones "
+            f"(from {min(p[0] for p in ge):,} steps on; the final models: {fmt_frames(b['tracking_horizon_20db']['median'])} against {fmt_frames(a['tracking_horizon_20db']['median'])} frames), "
+            f"and the mean PSNR over the first 32 frames of the final models is {b['mean_psnr_first32']:.1f} against {a['mean_psnr_first32']:.1f} dB "
+            "(different games, so an observation, not a like-for-like comparison).") if ge else ""
 
 
 def _v3_exploratory(res):
@@ -185,7 +224,8 @@ def _v3_exploratory(res):
         rows = [[f"{st:,}"] + [(f"{curve[st][k][0]:.3f} / {fmt_frames(curve[st][k][1])}" if k in curve[st] else "") for k in kinds] for st in sorted(curve)]
         out.append("**Exploratory: the learning curve of the collapse.** Collapse rate / median tracking horizon of the EMA checkpoints saved every 20k steps (same protocol, 64 episodes x 512 frames):\n\n"
                    + table(["training steps"] + [names[k] for k in kinds], rows)
-                   + "\n\nThe collapse rate falls steadily with training in v2, so a 20k-step comparison understates what 150k steps do and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json`.")
+                   + ("\n\n![collapse rate against training steps](media/collapse_curve.png)" if (ROOT / "media" / "collapse_curve.png").exists() else "")
+                   + "\n\nThe collapse rate falls with training in v2, so a 20k-step comparison says little about 150k steps and has to be read against v2 at the same step. Source: `results/prereg_<run>_s<step>.json` (`tools/render_collapse_curve.py`).")
     su = []
     for f in sorted(res.glob("signature_use_*.json"), key=lambda f: (_load_abs(f) or {}).get("step", 0)):
         j = _load_abs(f)
