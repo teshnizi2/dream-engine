@@ -26,16 +26,25 @@ try {
   result.backend = await page.evaluate(() => document.getElementById('r-backend').textContent);
   result.params = await page.evaluate(() => document.getElementById('r-params').textContent);
   await page.click('#btn-auto');
-  const waitQuiet = async (maxMs) => {            // wait for 3 consecutive samples with the GPU <= 30% busy (other jobs share it)
-    const t = Date.now(); let ok = 0;
-    while (Date.now() - t < maxMs) { const u = gpuUtil(); ok = u !== null && u <= 30 ? ok + 1 : 0; if (ok >= 3) return true; await new Promise((r) => setTimeout(r, 700)); }
-    return false;
+  // Other jobs share this GPU. ioreg's utilisation includes our own page, so pause the page, wait a moment and sample:
+  // that reading is "everyone else". Wait (up to maxMs) for it to be <= 30% three times in a row before a window.
+  const othersUtil = async () => {
+    await page.click('#btn-pause'); await new Promise((r) => setTimeout(r, 1200));
+    const xs = []; for (let i = 0; i < 3; i++) { xs.push(gpuUtil()); await new Promise((r) => setTimeout(r, 400)); }
+    await page.click('#btn-pause');
+    return Math.round(xs.reduce((u, v) => u + (v ?? 0), 0) / xs.length);
+  };
+  const waitQuiet = async (maxMs) => {
+    const t = Date.now(); let last = null;
+    while (Date.now() - t < maxMs) { last = await othersUtil(); if (last <= 30) return { quiet: true, others: last }; await new Promise((r) => setTimeout(r, 2000)); }
+    return { quiet: false, others: last };
   };
   const repeats = +(args.repeats || 3);
   for (const steps of [1, 2, 3, ...(repeats > 1 ? [1, 2, 3].flatMap((s) => Array(repeats - 1).fill(s)) : [])]) {
     await page.click(`.seg-b[data-steps="${steps}"]`);
     await new Promise((r) => setTimeout(r, 1500));
-    const quiet = args['no-wait'] ? null : await waitQuiet(+(args['quiet-wait'] || 60000));
+    const q = args['no-wait'] ? { quiet: null, others: await othersUtil() } : await waitQuiet(+(args['quiet-wait'] || 60000));
+    await new Promise((r) => setTimeout(r, 1000));
     const g0 = gpuUtil();
     const before = await page.evaluate(() => window.__ticks || 0);
     const t0 = Date.now();
@@ -49,7 +58,7 @@ try {
     const g1 = gpuUtil();
     const med = (a) => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
     result.runs.push({ steps, ms_per_frame_median: med(samples.map((s) => s.ms)), fps_readout_median: med(samples.map((s) => s.fps)),
-      fps_counted: (after - before) / dt, gpu_util_before_pct: g0, gpu_util_after_pct: g1, quiet_gpu_at_start: quiet });
+      fps_counted: (after - before) / dt, gpu_util_during_start_pct: g0, gpu_util_during_end_pct: g1, gpu_util_others_before_pct: q.others, quiet_gpu_at_start: q.quiet });
     console.log(JSON.stringify(result.runs[result.runs.length - 1]));
   }
   // summary per setting: median of the windows, and the best (quietest) window

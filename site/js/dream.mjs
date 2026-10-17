@@ -140,6 +140,7 @@ export class Dream {
   // Imagine the next frame given the action taken now. Returns { chw (quantised, [-1,1]), rgb (HWC bytes), ms }.
   async step(action) {
     const t0 = performance.now();
+    const P = this.prof || (this.prof = { prep: 0, nfe: 0, post: 0, n: 0 });
     this.acts.push(action.slice());
     this.acts.shift();
     const cs = this.ctxSigma;
@@ -167,16 +168,20 @@ export class Dream {
       q.writeBuffer(this.gpu.act.buf, 0, this.actArr);
       q.writeBuffer(this.gpu.cs.buf, 0, this.csArr, 0, 1);
     }
+    const tp = performance.now();
     const sg = this.sigmas;
     const x = this.xArr;
     this._noise(x, this.initScale === 'edm' ? sg[0] : 1.0);
+    const tn = performance.now();
     await eulerSample(x, sg, (xx, sigma) => this._nfe(xx, sigma));
+    const tq = performance.now();
     // clamp, quantise to the 8-bit grid, and keep the quantised frame as the next context frame
     const next = this.frames[0];            // recycle the oldest frame's storage
     const rgb = new Uint8Array(N);
     quantiseFrame(x, next, rgb);
     this.frames.push(this.frames.shift());   // the recycled array becomes the newest frame
     this.lastMs = performance.now() - t0;
+    P.prep += tp - t0; P.nfe += tq - tn; P.post += performance.now() - tq; P.n++;
     return { chw: next, rgb, ms: this.lastMs };
   }
 }

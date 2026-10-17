@@ -395,6 +395,7 @@ function installCapture() {
       return { n, dream_psnr: sd / n, copy_last_psnr: sc / n, steps, ctx_sigma: dream.ctxSigma, backend: dream.info.backend };
     },
     info: () => ({ ...dream.info, params: meta.params, steps }),
+    profile: () => { const p = dream.prof || { prep: 0, nfe: 0, post: 0, n: 1 }; const r = { frames: p.n, prep_ms: p.prep / p.n, model_ms: p.nfe / p.n, post_ms: p.post / p.n }; dream.prof = null; return r; },
     state: () => ({ x: real.x, y: real.y, dx: real.dx, dy: real.dy, framesSince }),
   };
   window.__captureReady = true;

@@ -178,14 +178,14 @@ def build(a):
         rows = []
         for st in ("1", "2", "3"):
             rs = [r for r in fps["runs"] if str(r["steps"]) == st]
-            lo = min(min(r["gpu_util_before_pct"], r["gpu_util_after_pct"]) for r in rs)
-            hi = max(max(r["gpu_util_before_pct"], r["gpu_util_after_pct"]) for r in rs)
+            lo = min(r["gpu_util_others_before_pct"] for r in rs)
+            hi = max(r["gpu_util_others_before_pct"] for r in rs)
             rows.append([st, f"{sm[st]['ms_per_frame_median']:.1f}", f"{sm[st]['fps_counted_median']:.0f}", f"{sm[st]['ms_per_frame_best']:.1f}",
                          f"{sm[st]['fps_counted_best']:.0f}", f"{lo}-{hi}", sm[st]["windows"]])
         sections.append("### Speed in the browser (Apple M4, headless Edge, WebGPU fp16 with graph capture)\n\n"
-                        + table(["denoising steps", "ms per frame, median window", "fps, median window", "ms per frame, best window", "fps, best window", "GPU busy (%) around the windows", "windows"], rows)
+                        + table(["denoising steps", "ms per frame, median window", "fps, median window", "ms per frame, best window", "fps, best window", "GPU busy with other jobs just before the windows (%)", "windows"], rows)
                         + "\n\nThe game tick is capped at 30 per second, so the best windows read 30 fps. **The M4's GPU was shared with other jobs on this machine during all "
-                        "runs** (the busy column comes from `ioreg`), which is why the median windows are slower than the best ones; a quiet GPU should behave like the best windows. "
+                        "runs** (the busy column: `ioreg` utilisation sampled with this page paused), which is why the median windows are slower than the best ones; a quiet GPU should behave like the best windows. "
                         f"Source: `{a.fps}` (`tools/browser_fps.mjs`).")
     text = pathlib.Path(ROOT / "README.template.md").read_text()
     text = text.replace("@@RESULTS_TABLES@@", "\n\n".join(sections))
