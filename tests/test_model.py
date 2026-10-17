@@ -217,3 +217,38 @@ def test_group_count_divides_any_channel_width():
     ctx, tgt, act = rand_batch(B=2)
     loss, _ = m.loss(ctx, tgt, act)
     assert torch.isfinite(loss)
+
+
+# ------------------------------------------------------------------ DIAMOND-style unrolled training (own denoised frames as context)
+
+def test_unrolled_loss_with_one_step_matches_the_single_step_loss_interface():
+    torch.manual_seed(0)
+    m = tiny(ctx_noise_max=0.0)
+    frames = torch.rand(4, 5, 3, 64, 64) * 2 - 1
+    act = encode_actions(torch.randint(0, 3, (4, 4, 3)))
+    loss, logs = m.loss_unrolled(frames, act, unroll=1)
+    assert torch.isfinite(loss) and loss.ndim == 0
+
+
+def test_unrolled_loss_replaces_later_context_frames_with_the_models_own_denoised_frames():
+    torch.manual_seed(0)
+    m = tiny(ctx_noise_max=0.0)
+    _randomise_zero_inits(m)
+    frames = torch.rand(2, 7, 3, 64, 64) * 2 - 1          # 4 context + 3 targets
+    act = encode_actions(torch.randint(0, 3, (2, 6, 3)))
+    seen = []
+    orig = m.denoise
+    real_F = m._F
+
+    def spy(x, cs, ctx, a, s_c):
+        seen.append(ctx.detach().clone())
+        return real_F(x, cs, ctx, a, s_c)
+
+    m._F = spy
+    loss, logs = m.loss_unrolled(frames, act, unroll=3)
+    assert torch.isfinite(loss) and len(seen) == 3
+    assert torch.equal(seen[0], frames[:, :4])                       # step 0 sees only real frames
+    assert not torch.equal(seen[1][:, -1], frames[:, 4])             # step 1: newest context frame is the model's own
+    assert torch.equal(seen[1][:, :3], frames[:, 1:4])               # ... and the older ones are still real
+    loss.backward()
+    assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in m.parameters())

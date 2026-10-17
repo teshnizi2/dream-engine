@@ -86,3 +86,35 @@ def test_op_histogram_and_size_are_reported(exported):
     _, p, _ = exported
     info = ex.describe(str(p))
     assert info["n_nodes"] > 50 and "Conv" in info["ops"] and info["size_mb"] > 0
+
+
+# ------------------------------------------------------------------ graph clean-up passes (browser speed)
+
+def test_basic_optimisation_and_silu_fusion_shrink_the_graph_without_changing_outputs(tmp_path):
+    m = make_model()
+    raw = tmp_path / "raw.onnx"
+    ex.export_onnx(m, str(raw), optimize=False)
+    opt = tmp_path / "opt.onnx"
+    ex.export_onnx(m, str(opt), optimize=True)
+    d_raw, d_opt = ex.describe(str(raw)), ex.describe(str(opt))
+    assert d_opt["n_nodes"] < 0.6 * d_raw["n_nodes"], (d_raw["n_nodes"], d_opt["n_nodes"])
+    assert "Sigmoid" not in d_opt["ops"] and d_opt["ops"].get("QuickGelu", 0) > 0
+    for seed, sigma, cs in [(0, 0.7, 0.1), (1, 0.01, 0.0)]:
+        xs = inputs(seed, sigma, cs)
+        with torch.no_grad():
+            ref = m.denoise_flat(*xs).numpy()
+        _, out = run(opt, xs)
+        assert np.abs(out - ref).max() < 2e-4
+
+
+def test_optimised_graph_only_uses_ops_the_webgpu_ep_supports(tmp_path):
+    m = make_model()
+    p = tmp_path / "o.onnx"
+    ex.export_onnx(m, str(p))
+    ops = set(ex.describe(str(p))["ops"])
+    # from the onnxruntime-web WebGPU operator list (+ metadata-only ops that have no kernel)
+    supported = {"Add", "Sub", "Mul", "Div", "Sqrt", "Pow", "Reciprocal", "Log", "Cos", "Sin", "Clip", "Conv", "Gemm",
+                 "MatMul", "Softmax", "Concat", "Slice", "Split", "Transpose", "Resize", "InstanceNormalization",
+                 "QuickGelu", "Reshape", "Unsqueeze", "Squeeze", "Flatten", "Cast", "Constant", "Identity", "Shape",
+                 "Gather", "Neg", "Sigmoid", "Mul"}
+    assert ops <= supported, ops - supported

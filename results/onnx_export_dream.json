@@ -1,0 +1,74 @@
+{
+ "script": "python export.py --ckpt runs/smoke_alice/final_ema.pt --out site/models --name dream --fp16 --verify",
+ "checkpoint_step": 3000,
+ "params": 6774755,
+ "fp32": {
+  "n_nodes": 719,
+  "ops": {
+   "Add": 120,
+   "Reshape": 102,
+   "Slice": 94,
+   "Unsqueeze": 90,
+   "Conv": 71,
+   "Mul": 54,
+   "Gemm": 48,
+   "InstanceNormalization": 47,
+   "QuickGelu": 47,
+   "Concat": 15,
+   "MatMul": 6,
+   "Div": 4,
+   "Transpose": 4,
+   "Sqrt": 3,
+   "Resize": 3,
+   "Pow": 2,
+   "Reciprocal": 2,
+   "Softmax": 2,
+   "Flatten": 1,
+   "Log": 1,
+   "Sin": 1,
+   "Cos": 1,
+   "Clip": 1
+  },
+  "size_mb": 27.340953,
+  "opset": 17
+ },
+ "fp16": {
+  "n_nodes": 726,
+  "ops": {
+   "Add": 120,
+   "Reshape": 102,
+   "Slice": 94,
+   "Unsqueeze": 90,
+   "Conv": 71,
+   "Mul": 54,
+   "Gemm": 48,
+   "InstanceNormalization": 47,
+   "QuickGelu": 47,
+   "Concat": 15,
+   "Cast": 7,
+   "MatMul": 6,
+   "Div": 4,
+   "Transpose": 4,
+   "Sqrt": 3,
+   "Resize": 3,
+   "Pow": 2,
+   "Reciprocal": 2,
+   "Softmax": 2,
+   "Log": 1,
+   "Sin": 1,
+   "Cos": 1,
+   "Flatten": 1,
+   "Clip": 1
+  },
+  "size_mb": 13.785267,
+  "opset": 17
+ },
+ "verify_fp32": {
+  "max_abs_diff_vs_pytorch": 2.086162567138672e-06,
+  "cases": 6
+ },
+ "verify_fp16": {
+  "max_abs_diff_vs_pytorch": 0.0017091259360313416,
+  "cases": 6
+ }
+}

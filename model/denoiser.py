@@ -125,6 +125,33 @@ class Denoiser(nn.Module):
             return ctx, torch.zeros(B, device=ctx.device)
         return ctx + torch.randn_like(ctx) * s_c.view(B, 1, 1, 1, 1), s_c
 
+    def loss_unrolled(self, frames: Tensor, act: Tensor, unroll: int = 1):
+        """DIAMOND-style multi-step training. frames [B, K+unroll, 3, H, W] in [-1,1], act [B, K+unroll-1, 3-hot 9].
+        Step i predicts frame K+i from the previous K frames; afterwards that frame is replaced (for the later steps'
+        context) by the model's own denoised, 8-bit-quantised, gradient-free estimate at the sampled noise level, so the
+        network also trains on its own imperfect frames."""
+        K = self.cfg.num_ctx
+        frames = frames.clone()
+        total = 0.0
+        for i in range(unroll):
+            ctx, target = frames[:, i:i + K], frames[:, K + i]
+            a = act[:, i:i + K]
+            B, C = target.shape[:2]
+            c = self.cfg
+            sigma = (torch.randn(B, device=target.device) * c.p_std + c.p_mean).exp().clip(c.sigma_min, c.sigma_max_train)
+            offset = c.sigma_offset_noise * torch.randn(B, C, 1, 1, device=target.device)
+            noisy = target + offset + torch.randn_like(target) * sigma.view(B, 1, 1, 1)
+            ctx_n, s_c = self.augment_context(ctx)
+            cs = self.conditioners(sigma)
+            out = self._F(noisy, cs, ctx_n, a, s_c)
+            tgt = (target - cs.c_skip.view(-1, 1, 1, 1) * noisy) / cs.c_out.view(-1, 1, 1, 1)
+            total = total + F.mse_loss(out, tgt)
+            with torch.no_grad():
+                d = cs.c_skip.view(-1, 1, 1, 1) * noisy + cs.c_out.view(-1, 1, 1, 1) * out
+                frames[:, K + i] = d.clamp(-1, 1).add(1).div(2).mul(255).round().div(255).mul(2).sub(1)
+        loss = total / unroll
+        return loss, {"loss": loss.detach()}
+
     def loss(self, ctx: Tensor, target: Tensor, act: Tensor):
         """ctx [B,K,3,H,W], target [B,3,H,W], act [B,K,9]; all in [-1,1]."""
         B, C = target.shape[:2]

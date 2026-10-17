@@ -1,0 +1,49 @@
+<!doctype html><meta charset="utf-8"><body><script type="module">
+// Verifies the exported ONNX graphs in the browser: runs the test vectors written by export.py through
+// onnxruntime-web (WebGPU and/or WASM, fp32/fp16, with and without graph capture) and compares with PyTorch's outputs.
+import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs';
+const q = new URLSearchParams(location.search);
+const base = q.get('base') || '/site/models/';
+const res = { cases: [] };
+try {
+  const idx = await (await fetch(base + 'testvec.json')).json();
+  const blob = new Float32Array(await (await fetch(base + 'testvec.bin')).arrayBuffer());
+  const vecs = []; let off = 0;
+  for (const c of idx) { const parts = []; for (const s of c.sizes) { parts.push(blob.subarray(off, off + s)); off += s; } vecs.push({ ...c, x: parts[0], ctx: parts[1], act: parts[2], out: parts[3] }); }
+  for (const cfg of JSON.parse(q.get('configs'))) {      // [{model:'dream_fp16', ep:'webgpu', capture:true}, ...]
+    const r = { ...cfg };
+    try {
+      const bytes = new Uint8Array(await (await fetch(`${base}${cfg.model}.onnx`)).arrayBuffer());
+      const opts = { executionProviders: cfg.ep === 'webgpu' ? [{ name: 'webgpu', preferredLayout: 'NHWC' }] : ['wasm'], graphOptimizationLevel: 'all' };
+      if (cfg.capture) { opts.enableGraphCapture = true; opts.preferredOutputLocation = { denoised: 'gpu-buffer' }; }
+      const sess = await ort.InferenceSession.create(bytes, opts);
+      let worst = 0; let mean = 0;
+      const device = cfg.capture ? ort.env.webgpu.device : null;
+      let gpu = null;
+      for (const v of vecs) {
+        let out;
+        if (cfg.capture) {
+          if (!gpu) {
+            const mk = (arr, dims) => { const buf = device.createBuffer({ size: Math.ceil(arr.byteLength / 16) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }); return { buf, t: ort.Tensor.fromGpuBuffer(buf, { dataType: 'float32', dims }) }; };
+            gpu = { x: mk(v.x, [1, 3, 64, 64]), sigma: mk(new Float32Array(1), [1]), ctx: mk(v.ctx, [1, 12, 64, 64]), act: mk(v.act, [1, 4, 9]), cs: mk(new Float32Array(1), [1]) };
+          }
+          device.queue.writeBuffer(gpu.x.buf, 0, v.x); device.queue.writeBuffer(gpu.ctx.buf, 0, v.ctx); device.queue.writeBuffer(gpu.act.buf, 0, v.act);
+          device.queue.writeBuffer(gpu.sigma.buf, 0, new Float32Array([v.sigma])); device.queue.writeBuffer(gpu.cs.buf, 0, new Float32Array([v.ctx_sigma]));
+          const feeds = { x: gpu.x.t, sigma: gpu.sigma.t, ctx: gpu.ctx.t, act: gpu.act.t, ctx_sigma: gpu.cs.t };
+          if (!r.warm) { await (await sess.run(feeds)).denoised.getData(); r.warm = true; }   // capture run
+          out = await (await sess.run(feeds)).denoised.getData();
+        } else {
+          const feeds = { x: new ort.Tensor('float32', v.x, [1, 3, 64, 64]), sigma: new ort.Tensor('float32', [v.sigma], [1]), ctx: new ort.Tensor('float32', v.ctx, [1, 12, 64, 64]), act: new ort.Tensor('float32', v.act, [1, 4, 9]), ctx_sigma: new ort.Tensor('float32', [v.ctx_sigma], [1]) };
+          out = (await sess.run(feeds)).denoised.data;
+        }
+        let m = 0, s = 0; for (let i = 0; i < out.length; i++) { const d = Math.abs(out[i] - v.out[i]); if (d > m) m = d; s += d; }
+        worst = Math.max(worst, m); mean += s / out.length;
+        (r.vecs ||= []).push({ sigma: v.sigma, max_abs_diff: m });
+      }
+      r.max_abs_diff = worst; r.mean_abs_diff = mean / vecs.length; delete r.warm;
+    } catch (e) { r.error = String(e.stack || e).slice(0, 400); }
+    res.cases.push(r);
+  }
+} catch (e) { res.error = String(e.stack || e).slice(0, 400); }
+window.__bench = res;
+</script>

@@ -40,7 +40,7 @@ try {
     else if (args.verbose) console.log('[page]', t);
   });
   const qs = new URLSearchParams({ models: args.models || '', model: modelUrl, ep: args.ep || 'webgpu', layout: args.layout || 'NHWC', n: args.n || '40',
-    opt: args.opt || 'all', threads: args.threads || '1', ...(args.profile ? { profile: '1' } : {}) });
+    opt: args.opt || 'all', threads: args.threads || '1', capture: args.capture || '1', base: args.base || '', configs: args.configs || '[]', ...(args.profile ? { profile: '1' } : {}) });
   await page.goto(`http://127.0.0.1:${srv.port}/tools/${args.page || 'bench.html'}?${qs}`);
   await page.waitForFunction('window.__bench', { timeout: +(args.timeout || 300000) });
   const r = await page.evaluate(() => window.__bench);

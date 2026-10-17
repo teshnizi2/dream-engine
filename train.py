@@ -44,6 +44,7 @@ def parse_args(argv=None):
     p.add_argument("--cond", type=int, default=256)
     p.add_argument("--ctx-noise-max", type=float, default=0.5)
     p.add_argument("--ctx-noise-prob", type=float, default=0.9)
+    p.add_argument("--unroll", type=int, default=1, help="DIAMOND-style multi-step training: later steps see the model's own denoised frames")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--prefetch", type=int, default=4)
     p.add_argument("--device", default="auto")
@@ -84,8 +85,9 @@ def save_atomic(obj, path):
 
 
 def to_batch(b, device):
+    """-> all frames [B, T, 3, H, W] in [-1, 1] and one-hot actions [B, T-1, 9]."""
     f = b["frames"].to(device, non_blocking=True).permute(0, 1, 4, 2, 3).float().div(127.5).sub(1)
-    return f[:, :4], f[:, 4], encode_actions(b["actions"].to(device))
+    return f, encode_actions(b["actions"].to(device))
 
 
 @torch.no_grad()
@@ -144,7 +146,8 @@ def main(argv=None):
     print(f"device {device} | params {n_params / 1e6:.2f}M | batch {a.batch} | steps {step} -> {a.steps}", flush=True)
 
     loss_fn = torch.compile(model.loss) if a.compile else model.loss
-    stream = BatchStream(a.batch, 5, base_seed=a.seed + 7919 * resumes)
+    loss_unrolled_fn = torch.compile(model.loss_unrolled) if a.compile else model.loss_unrolled
+    stream = BatchStream(a.batch, 4 + a.unroll, base_seed=a.seed + 7919 * resumes)
     kw = dict(batch_size=None, num_workers=a.workers)
     if a.workers > 0:
         kw.update(prefetch_factor=a.prefetch, persistent_workers=True)
@@ -179,15 +182,20 @@ def main(argv=None):
     ema_p, mod_p = list(ema.parameters()), list(model.parameters())
     last_ck_step = step
     while step < a.steps and not stop["flag"]:
-        ctx, tgt, act = to_batch(next(loader), device)
+        frames, act = to_batch(next(loader), device)
         for g in opt.param_groups:
             g["lr"] = lr_at(step, a)
         model.train()
+        def compute_loss():
+            if a.unroll > 1:
+                return loss_unrolled_fn(frames, act, a.unroll)
+            return loss_fn(frames[:, :4], frames[:, 4], act[:, :4])
+
         if amp_dtype is not None:
             with torch.autocast(device_type=device.type, dtype=amp_dtype):
-                loss, _ = loss_fn(ctx, tgt, act)
+                loss, _ = compute_loss()
         else:
-            loss, _ = loss_fn(ctx, tgt, act)
+            loss, _ = compute_loss()
         opt.zero_grad(set_to_none=True)
         if scaler:
             scaler.scale(loss).backward()

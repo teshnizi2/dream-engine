@@ -28,6 +28,25 @@ from model.denoiser import Denoiser, DenoiserConfig, encode_actions  # noqa: E40
 INPUTS = ["x", "sigma", "ctx", "act", "ctx_sigma"]
 
 
+class PaddedConv(torch.nn.Module):
+    """3x3 conv whose input is zero-padded to a multiple of 4 channels (same maths, extra zero weights). The
+    onnxruntime-web WebGPU conv in NHWC layout returns wrong values for 15 input channels, 16 is fine."""
+
+    def __init__(self, conv: torch.nn.Conv2d):
+        super().__init__()
+        self.pad = (-conv.in_channels) % 4
+        self.conv = torch.nn.Conv2d(conv.in_channels + self.pad, conv.out_channels, conv.kernel_size, padding=conv.padding)
+        with torch.no_grad():
+            self.conv.weight.zero_()
+            self.conv.weight[:, :conv.in_channels] = conv.weight
+            self.conv.bias.copy_(conv.bias)
+
+    def forward(self, x):
+        if self.pad:
+            x = torch.cat([x, x.new_zeros(x.shape[0], self.pad, x.shape[2], x.shape[3])], dim=1)
+        return self.conv(x)
+
+
 class OnnxDenoiser(torch.nn.Module):
     def __init__(self, model: Denoiser):
         super().__init__()
@@ -45,10 +64,83 @@ def example_inputs(seed=0, sigma=0.7, ctx_sigma=0.1):
     return x, torch.tensor([sigma]), ctx, act, torch.tensor([ctx_sigma])
 
 
-def export_onnx(model: Denoiser, path: str, opset: int = 17) -> None:
-    model = model.eval().cpu()
-    torch.onnx.export(OnnxDenoiser(model), example_inputs(), path, input_names=INPUTS, output_names=["denoised"],
+def optimize_basic(src: str, dst: str) -> None:
+    """ORT's offline BASIC graph optimisation: constant folding and removal of the Shape/Gather/Unsqueeze/Identity
+    chains the tracer leaves behind (1869 -> ~765 nodes). Keeps standard ONNX ops only."""
+    import onnxruntime as ort
+    so = ort.SessionOptions()
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+    so.optimized_model_filepath = dst
+    ort.InferenceSession(src, so, providers=["CPUExecutionProvider"])
+
+
+def fuse_silu(src: str, dst: str) -> int:
+    """Replace every Sigmoid(x) * x pair by one com.microsoft QuickGelu(x, alpha=1) node (= SiLU), which the
+    onnxruntime-web WebGPU EP implements as a single kernel. Returns the number of fused pairs. Also prunes the
+    opset imports left behind by ORT's offline optimiser."""
+    import onnx
+    from onnx import helper
+    m = onnx.load(src)
+    g = m.graph
+    consumers = {}
+    for n in g.node:
+        for i in n.input:
+            consumers.setdefault(i, []).append(n)
+    remove, add = set(), []
+    for n in g.node:
+        if n.op_type != "Sigmoid":
+            continue
+        x, s = n.input[0], n.output[0]
+        users = consumers.get(s, [])
+        if len(users) != 1 or users[0].op_type != "Mul" or set(users[0].input) != {x, s}:
+            continue
+        mul = users[0]
+        add.append(helper.make_node("QuickGelu", [x], [mul.output[0]], domain="com.microsoft", alpha=1.0,
+                                    name=(mul.name or mul.output[0]) + "_silu"))
+        remove.update({id(n), id(mul)})
+    nodes = [n for n in g.node if id(n) not in remove]
+    # keep topological order: insert each fused node where its Mul was (before its first consumer)
+    del g.node[:]
+    pending = {a.output[0]: a for a in add}
+    produced = {i.name for i in g.input} | {i.name for i in g.initializer}
+    queue = list(nodes)
+    out = []
+    progressed = True
+    while queue or pending:
+        progressed = False
+        for n in list(queue):
+            if all((i in produced or i == "") for i in n.input):
+                out.append(n); queue.remove(n); produced.update(n.output); progressed = True
+        for o, a in list(pending.items()):
+            if all(i in produced for i in a.input):
+                out.append(a); del pending[o]; produced.add(o); progressed = True
+        if not progressed:
+            raise RuntimeError("could not topologically order the fused graph")
+    g.node.extend(out)
+    keep = {"": 17, "ai.onnx": 17}
+    doms = {o.domain: o.version for o in m.opset_import}
+    del m.opset_import[:]
+    m.opset_import.append(helper.make_opsetid("", max(doms.get("", 17), doms.get("ai.onnx", 17))))
+    if add:
+        m.opset_import.append(helper.make_opsetid("com.microsoft", 1))
+    onnx.save(m, dst)
+    return len(add)
+
+
+def export_onnx(model: Denoiser, path: str, opset: int = 17, optimize: bool = True) -> None:
+    import copy
+    model = copy.deepcopy(model).eval().cpu()
+    model.inner.conv_in = PaddedConv(model.inner.conv_in)
+    raw = path if not optimize else path + ".raw.onnx"
+    torch.onnx.export(OnnxDenoiser(model), example_inputs(), raw, input_names=INPUTS, output_names=["denoised"],
                       opset_version=opset, dynamo=False, do_constant_folding=True)
+    if optimize:
+        import os
+        basic = path + ".basic.onnx"
+        optimize_basic(raw, basic)
+        fuse_silu(basic, path)
+        os.remove(raw)
+        os.remove(basic)
 
 
 def to_fp16(src: str, dst: str) -> None:

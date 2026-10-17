@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dream Engine</title>
+<meta name="description" content="A tiny diffusion model learned a first-person maze game from pixels. In this tab it is the game: left the real engine, right the network imagining every frame from your keypresses.">
+<meta name="theme-color" content="#0e1117">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230e1117'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23e8ecf5'/%3E%3Crect x='9' y='3' width='4' height='4' fill='%232e3a52'/%3E%3Crect x='3' y='9' width='4' height='4' fill='%232e3a52'/%3E%3Crect x='9' y='9' width='4' height='4' fill='%23f59e0b'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs" } }
+</script>
+</head>
+<body class="loading">
+<div class="grain" aria-hidden="true"></div>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6" fill="#e8ecf5"/><rect x="9" y="1" width="6" height="6" fill="#2e3a52"/><rect x="1" y="9" width="6" height="6" fill="#2e3a52"/><rect x="9" y="9" width="6" height="6" fill="#f59e0b"/></svg>
+      <div>
+        <h1>dream <em>engine</em></h1>
+        <p class="tag">A diffusion model that learned a maze game from its pixels is now the game. Left, the real engine. Right, the network imagining every frame from your keypresses, with no game code.</p>
+      </div>
+    </div>
+    <nav class="top-actions" aria-label="Page">
+      <button class="btn ghost" id="btn-about" aria-expanded="false" aria-controls="drawer">About</button>
+    </nav>
+  </header>
+
+  <main class="stage" id="stage">
+    <section class="panel real" id="panel-real" aria-label="Real game">
+      <header class="panel-head">
+        <span class="dot" aria-hidden="true"></span><b>REAL</b>
+        <span class="sub">the actual engine · plain JavaScript</span>
+      </header>
+      <div class="screen"><canvas id="cv-real" width="64" height="64" aria-label="Real game view"></canvas><div class="scan" aria-hidden="true"></div></div>
+      <footer class="panel-foot"><span id="pose">x 0.00 · y 0.00</span></footer>
+    </section>
+
+    <section class="panel dream" id="panel-dream" aria-label="Dreamed game">
+      <header class="panel-head">
+        <span class="dot live" aria-hidden="true"></span><b>DREAM</b>
+        <span class="sub" id="dream-sub">a neural network · no game code</span>
+      </header>
+      <div class="screen"><canvas id="cv-dream" width="64" height="64" aria-label="Dreamed game view"></canvas><div class="scan" aria-hidden="true"></div><div class="veil" id="veil"><span id="veil-text">waking up…</span></div></div>
+      <footer class="panel-foot"><span id="dream-foot">frames since wake-up 0</span></footer>
+    </section>
+
+    <div class="keys" id="keys" aria-label="Keys pressed (sent to both panels)">
+      <div class="keys-cluster">
+        <span class="key sm" data-k="Q" title="Strafe left">Q</span><span class="key" data-k="F" title="Forward">W</span><span class="key sm" data-k="E" title="Strafe right">E</span>
+        <span class="key" data-k="L" title="Turn left">A</span><span class="key" data-k="B" title="Back">S</span><span class="key" data-k="R" title="Turn right">D</span>
+      </div>
+      <p class="keys-note">The same keypresses go to both panels. Arrow keys work too.</p>
+    </div>
+  </main>
+
+  <section class="controls" aria-label="Controls">
+    <button class="btn primary" id="btn-wake" title="Re-seed the dream with the last 4 real frames (R)">Wake up <kbd>R</kbd></button>
+    <button class="btn" id="btn-dreamonly" aria-pressed="false" title="Hide the real panel (T)">Dream only <kbd>T</kbd></button>
+    <div class="seg" role="group" aria-label="Denoising steps per frame">
+      <span class="seg-lab">steps</span>
+      <button class="seg-b" data-steps="1" aria-pressed="false">1</button>
+      <button class="seg-b" data-steps="2" aria-pressed="false">2</button>
+      <button class="seg-b" data-steps="3" aria-pressed="true">3</button>
+    </div>
+    <button class="btn" id="btn-auto" aria-pressed="false" title="Replay a scripted walk through the maze (no keys needed)">Autoplay</button>
+    <button class="btn" id="btn-scan" aria-pressed="false" title="CRT scanlines">Scanlines</button>
+    <button class="btn" id="btn-pause" aria-pressed="false" title="Pause (P)">Pause <kbd>P</kbd></button>
+  </section>
+
+
+  <section class="deck" aria-label="Live readouts">
+    <div class="cell wide"><span class="lab">backend</span><span class="val" id="r-backend">…</span></div>
+    <div class="cell"><span class="lab">ms / frame</span><span class="val" id="r-ms">–</span></div>
+    <div class="cell"><span class="lab">fps</span><span class="val" id="r-fps">–</span></div>
+    <div class="cell"><span class="lab">steps / frame</span><span class="val" id="r-steps">3</span></div>
+    <div class="cell"><span class="lab">drift PSNR</span><span class="val" id="r-psnr">–</span></div>
+    <div class="cell"><span class="lab">since wake-up</span><span class="val" id="r-since">0</span></div>
+    <div class="cell"><span class="lab">parameters</span><span class="val" id="r-params">–</span></div>
+  </section>
+
+  <section class="drift card" aria-label="Drift of the dream away from the real game">
+    <div class="drift-head"><span class="lab">Drift</span><span class="muted">PSNR of the dream against the real frame, dB (higher = closer)</span></div>
+    <canvas id="cv-drift" width="900" height="72"></canvas>
+  </section>
+
+
+  <footer class="credits">
+    Recipe: DIAMOND (Alonso et al., NeurIPS 2024, MIT) · EDM (Karras et al. 2022) · context-noise trick from GameNGen (Valevski et al. 2024) · runs on onnxruntime-web (MIT) · type: Bricolage Grotesque, JetBrains Mono (OFL) · training data: generated by the game itself, no external datasets.
+  </footer>
+</div>
+
+<div class="touchpad" id="touchpad" aria-label="Touch controls">
+  <div class="tp-left">
+    <button class="tp" data-k="L" aria-label="Turn left">◀</button>
+    <button class="tp" data-k="R" aria-label="Turn right">▶</button>
+  </div>
+  <div class="tp-mid">
+    <button class="tp sm" data-k="Q" aria-label="Strafe left">Q</button>
+    <button class="tp sm" data-k="E" aria-label="Strafe right">E</button>
+  </div>
+  <div class="tp-right">
+    <button class="tp" data-k="F" aria-label="Forward">▲</button>
+    <button class="tp" data-k="B" aria-label="Back">▼</button>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="About this demo" tabindex="-1">
+  <button class="btn ghost close" id="btn-close" aria-label="Close">Close</button>
+  <h2>About</h2>
+
+  <h3>What you are looking at</h3>
+  <p>Both panels get the same keypresses. The left one is a tiny raycaster, ordinary game code on a 16×16 map. The right one contains no game code at all: a neural network looks at the last four frames it produced and the last four actions, and <em>imagines the next frame</em>. Then it feeds that frame back in. After the first four frames (copied from the real game), everything you see on the right is imagination.</p>
+
+  <h3>How it works</h3>
+  <svg class="diagram" viewBox="0 0 440 118" role="img" aria-label="Last 4 frames and actions go into a U-Net that denoises noise into the next frame, which is fed back">
+    <g font-family="JetBrains Mono, monospace" font-size="9" fill="#8893ab">
+      <rect x="6" y="14" width="28" height="28" fill="#151a23" stroke="#2e3a52"/><rect x="14" y="22" width="28" height="28" fill="#151a23" stroke="#2e3a52"/><rect x="22" y="30" width="28" height="28" fill="#151a23" stroke="#e8ecf5"/>
+      <text x="6" y="76">last 4 frames</text>
+      <rect x="6" y="86" width="46" height="18" rx="3" fill="#151a23" stroke="#2e3a52"/><text x="12" y="98" fill="#e8ecf5">W + D …</text><text x="58" y="98">last 4 keys</text>
+      <path d="M62 44 H110 M62 95 H96 V62 H110" stroke="#2e3a52" fill="none"/>
+      <rect x="110" y="30" width="118" height="64" rx="8" fill="#151a23" stroke="#f59e0b"/>
+      <text x="124" y="52" fill="#e8ecf5" font-size="10">U-Net denoiser</text><text x="124" y="66">noise → frame</text><text x="124" y="80">1–3 steps</text>
+      <path d="M228 62 H262" stroke="#2e3a52"/><path d="M256 57 l6 5 l-6 5" stroke="#2e3a52" fill="none"/>
+      <rect x="262" y="34" width="56" height="56" fill="#151a23" stroke="#f59e0b"/>
+      <text x="268" y="105">next frame</text>
+      <path d="M290 34 V12 H34 V14" stroke="#2e3a52" stroke-dasharray="3 3" fill="none"/><text x="120" y="9">fed back as context</text>
+    </g>
+  </svg>
+  <p>The network is a small U-Net (see the parameter count above) trained as an EDM diffusion model (Karras et al.), in the way <a href="https://github.com/eloialonso/diamond" target="_blank" rel="noopener">DIAMOND</a> did for Atari: it denoises a noisy copy of the next frame, conditioned on the previous frames (stacked as extra channels) and on the actions (through adaptive group norm). Two ingredients matter for staying coherent: the context frames are <em>noised during training</em> (the trick from GameNGen), so the model learns to repair its own mistakes instead of trusting them, and sampling needs only a few steps. The same model also runs here: onnxruntime-web executes the exported graph on your GPU through WebGPU, with a WASM fallback.</p>
+  <p>The training data was never recorded: the game is cheap enough to simulate, so every training batch was freshly generated from a random-walk policy (sticky random actions, wall avoidance, random respawns).</p>
+
+  <h3>How it differs from GameNGen and Genie</h3>
+  <p>GameNGen turned Doom into a neural engine by fine-tuning a Stable Diffusion model on huge amounts of recorded agent play; Genie learned playable worlds from internet video with no action labels at all. Both are far bigger systems trained on far more compute. This one is a toy on purpose: a few million parameters, 64×64 pixels, <em>one fixed map</em>, trained for hours, not weeks. It shows the recipe, not the state of the art.</p>
+
+  <h3>Honest limits</h3>
+  <ul>
+    <li><b>It has memorised one map.</b> It does not generalise to new levels; it knows this maze the way a person knows their own flat.</li>
+    <li><b>It drifts.</b> Errors compound frame after frame. The drift panel shows the PSNR against the real game; <span data-eval="drift"></span> “Wake up” re-seeds it from the real game.</li>
+    <li><b>Fine detail wobbles.</b> Thin stripes (the window gallery) and brick lines are the first things to blur or flicker.</li>
+    <li><b>Out-of-distribution play hallucinates.</b> It was trained on exploration-like movement; unusual sequences (spinning, hugging walls) are weaker.</li>
+    <li><b>Speed is whatever your GPU gives.</b> The ms/frame and fps readouts are measured live in this tab.</li>
+  </ul>
+
+  <h3>Credits</h3>
+  <p>DIAMOND, “Diffusion for World Modeling”, Alonso et al., NeurIPS 2024 (U-Net, EDM recipe; MIT licence). EDM: Karras et al., “Elucidating the Design Space of Diffusion-Based Generative Models”, 2022. GameNGen: Valevski et al., “Diffusion Models Are Real-Time Game Engines”, 2024 (context noise augmentation). onnxruntime-web by Microsoft (MIT). Fonts: Bricolage Grotesque and JetBrains Mono (SIL Open Font Licence). Everything else, including the game, the map and the weights, was made for this demo.</p>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

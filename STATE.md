@@ -10,15 +10,21 @@ keypresses. Spec: `BRIEF.md`. Shared rules: `../visual-series-RULES.md` (re-read
 ## Status (verified = produced by a run, saved in `results/`)
 | Piece | Status | Evidence |
 |---|---|---|
-| Game twins (Py `game/raycaster.py`, JS `game/raycaster.mjs`, shared `game/spec.json`) | DONE | `results/game_parity.json`: 100.0000% identical pixels, max abs diff 0, state diff 0 after 100 steps (808 trajectory frames + 300 random poses + 4 edge poses) |
-| Data (`data/policy.py`, `data/loader.py`, `data/coverage.py`) | DONE | `results/data_throughput.json` (~1.6k frames/s/process), `results/coverage.json|png` (normalised entropy 0.995, no empty cell) |
-| Model (`model/unet.py`, `denoiser.py`, `sampler.py`, `metrics.py`) | DONE, tested | 47 Python tests green (`pytest tests/`), 4 node tests green (`node --test tests/*.test.mjs`) |
-| `train.py` (resumable, EMA, bf16 on CUDA, logs) | TODO | |
-| Local MPS smoke run (<= 20 min) | TODO | |
-| `export.py` (ONNX opset 17, batch 1, static) + numeric check | TODO | |
-| Browser demo `site/` | TODO | |
-| ALICE: smoke job, then full chained training | TODO (approved by Reza, see below) | |
-| Eval (1-step PSNR/SSIM, 32/128/512-frame drift), media, README/POST | TODO | |
+| Game twins (Py `game/raycaster.py`, JS `game/raycaster.mjs`, shared `game/spec.json`) | DONE | `results/game_parity.json`: 100.0000% identical pixels, max abs diff 0, state diff 0 after 100 steps |
+| Data (`data/policy.py`, `data/loader.py`, `data/coverage.py`) | DONE | `results/data_throughput.json`, `results/coverage.json|png` (entropy 0.995) |
+| Model (`model/*`), `train.py` (resumable, EMA, bf16, `--unroll`), `eval.py`, `export.py` | DONE, tested | `pytest tests/` (60+ tests), `node --test tests/*.test.mjs` |
+| Local MPS smoke run | DONE (it stopped at step ~290: GPU shared, 0.3 it/s) | `results/local_mps_smoke_metrics.jsonl`; loss 1.10 -> 0.22 |
+| ALICE smoke job 5246018 | DONE | RUNS.md row 1: 3000 steps in 4.75 min, 12.2 it/s on one A100, 1-step PSNR 24.9 vs 22.4 copy-last |
+| ONNX export (opset 17, static, fp32+fp16) | DONE | `results/onnx_export_dream.json`; ONNX vs PyTorch: fp32 1e-6, fp16 7e-3 (browser WebGPU, `tools/selftest.html`) |
+| Browser demo `site/` | WORKS with the smoke model | in-browser 1-step PSNR matches Python on the same windows (25.38 vs 25.25-25.32 dB); 3 steps: ~24 fps, 2 steps ~29, 1 step 30 (capped) on a shared GPU |
+| ALICE ablations (wave 1: 4 jobs, 20k steps) | RUNNING: 5246079 abl_B, 5246080 abl_B_noctx, 5246081 abl_A, 5246082 abl_Bd1 | results/eval_abl_*.json on the cluster (`~/dream-engine/results`) |
+| Full ALICE run, final eval, media, README/POST | TODO | |
+
+### Browser findings worth remembering
+- WebGPU NHWC conv gives WRONG results for 15 input channels: the exporter pads conv_in to 16 channels (`PaddedConv`). Without it the dream is noise.
+- Graph capture (`enableGraphCapture` + GPU-buffer IO binding) cuts a forward pass from ~25 ms to ~15 ms; compute (conv throughput ~0.4 TFLOPS under contention) is then the floor.
+- A Split with many outputs fails on WebGPU (storage-buffer limit), so modulation Gemms are not fused.
+- The GPU is shared with other builders (often 60-99% busy): every fps number must be reported with that caveat (`tools/browser_fps.mjs` records the utilisation).
 
 ## Decisions (change only with a reason written here)
 1. **Action space is factorised** instead of "6 discrete": (move: none/fwd/back) x (strafe: none/left/right) x
@@ -56,6 +62,10 @@ keypresses. Spec: `BRIEF.md`. Shared rules: `../visual-series-RULES.md` (re-read
   smoke job, then one resumable run of chained 4 h jobs on `gpu-short` / `a100:1` with a hard cap on total hours
   (see `alice/`); GPU-hours used will be reported.
 - Strafe (Q/E): kept in the action space by default; hidden in the UI if it hurts quality (see decision 1).
+
+## ALICE log
+- 5246018 smoke (SMOKE, RUNS.md row 1). Wave 1 ablations 5246079/80/81/82 (20k steps each, widths/depth/context-noise), submitted 14:21.
+- Cluster folder: `~/dream-engine` (env in `~/dream-engine/env`, runs in `~/dream-engine/runs`, logs in `~/dream-engine/logs`). The reasoning-fractals builder shares the Slurm account: never cancel jobs named rf-*.
 
 ## Next steps
 1. `git commit` this milestone. Write `train.py`; local MPS smoke run (loss falls, samples look like corridors).

@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><body><pre id="o"></pre><script type="module">
+// Dev-only: does ORT-web graph capture (IO binding with GPU buffers) cut the per-run overhead?
+import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs';
+const q = new URLSearchParams(location.search);
+const model = q.get('model'); const capture = q.get('capture') !== '0'; const layout = q.get('layout') || 'NHWC';
+const res = { model, capture, layout };
+try {
+  const t0 = performance.now();
+  const sess = await ort.InferenceSession.create(model, {
+    executionProviders: [{ name: 'webgpu', preferredLayout: layout }],
+    enableGraphCapture: capture,
+    preferredOutputLocation: { denoised: 'gpu-buffer' },
+  });
+  res.load_ms = performance.now() - t0;
+  const device = ort.env.webgpu.device;
+  const mk = (arr, dims) => {
+    const size = Math.ceil(arr.byteLength / 16) * 16;
+    const buf = device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(buf, 0, arr);
+    return { buf, tensor: ort.Tensor.fromGpuBuffer(buf, { dataType: 'float32', dims }) };
+  };
+  const rnd = (n) => Float32Array.from({ length: n }, () => Math.random() * 2 - 1);
+  const x = mk(rnd(3 * 4096), [1, 3, 64, 64]);
+  const sigma = mk(new Float32Array([0.7]), [1]);
+  const ctx = mk(rnd(12 * 4096), [1, 12, 64, 64]);
+  const actArr = new Float32Array(36); for (let k = 0; k < 4; k++) { actArr[k * 9 + 1] = 1; actArr[k * 9 + 3] = 1; actArr[k * 9 + 6] = 1; }
+  const act = mk(actArr, [1, 4, 9]);
+  const cs = mk(new Float32Array([0.1]), [1]);
+  const feeds = { x: x.tensor, sigma: sigma.tensor, ctx: ctx.tensor, act: act.tensor, ctx_sigma: cs.tensor };
+  for (let i = 0; i < 6; i++) { const o = await sess.run(feeds); await o.denoised.getData(); }
+  const ts = [];
+  for (let i = 0; i < 40; i++) {
+    const t = performance.now();
+    device.queue.writeBuffer(x.buf, 0, rnd(3 * 4096));
+    device.queue.writeBuffer(sigma.buf, 0, new Float32Array([0.5 + (i % 3)]));
+    const o = await sess.run(feeds);
+    const d = await o.denoised.getData();
+    ts.push(performance.now() - t);
+    o.denoised.dispose?.();
+    res.last = d[0];
+  }
+  ts.sort((a, b) => a - b);
+  res.nfe_ms_median = ts[20]; res.nfe_ms_p10 = ts[4]; res.nfe_ms_p90 = ts[36];
+} catch (e) { res.error = String(e.stack || e).slice(0, 900); }
+window.__bench = res;
+</script>

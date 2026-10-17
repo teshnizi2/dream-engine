@@ -27,8 +27,9 @@ RUN=${RUN:-full}
 STEPS=${STEPS:-120000}
 BATCH=${BATCH:-128}
 LR=${LR:-3e-4}
-CHANNELS=${CHANNELS:-32,64,96,128}
-DEPTHS=${DEPTHS:-2,2,2,2}
+# lists use '-' (sbatch --export cannot carry commas inside a value): CHANNELS=32-64-96-128 DEPTHS=2-2-2-2
+CHANNELS=${CHANNELS:-32-64-96-128}
+DEPTHS=${DEPTHS:-2-2-2-2}
 EMA=${EMA:-0.9995}
 WORKERS=${WORKERS:-14}
 TIME_LIMIT_MIN=${TIME_LIMIT_MIN:-228}
@@ -37,8 +38,8 @@ CKPT_EVERY=${CKPT_EVERY:-1000}
 
 echo "job $SLURM_JOB_ID on $(hostname) | run $RUN | steps $STEPS | batch $BATCH | $(date)"
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
-python train.py --out "runs/$RUN" --steps "$STEPS" --batch "$BATCH" --lr "$LR" --channels "$CHANNELS" \
-  --depths "$DEPTHS" --ema "$EMA" --device cuda --amp bf16 --workers "$WORKERS" --resume \
+python train.py --out "runs/$RUN" --steps "$STEPS" --batch "$BATCH" --lr "$LR" --channels "${CHANNELS//-/,}" \
+  --depths "${DEPTHS//-/,}" --ema "$EMA" --device cuda --amp bf16 --workers "$WORKERS" --resume \
   --time-limit-min "$TIME_LIMIT_MIN" --eval-every "$EVAL_EVERY" --eval-n 128 --ckpt-every "$CKPT_EVERY" \
   --milestone-every 20000 --log-every 100 ${EXTRA_ARGS:-}
 if [ "${RUN_EVAL:-0}" = "1" ] && [ -f "runs/$RUN/final_ema.pt" ]; then

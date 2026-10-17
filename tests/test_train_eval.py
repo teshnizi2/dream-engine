@@ -93,3 +93,12 @@ def test_train_script_stops_on_time_limit_and_still_checkpoints(tmp_path):
     assert r.returncode == 0, r.stderr[-2000:]
     ck = torch.load(tmp_path / "ckpt_last.pt", map_location="cpu", weights_only=False)
     assert 0 < ck["step"] < 100000
+
+
+def test_train_script_supports_unrolled_training(tmp_path):
+    r = run_train(tmp_path, "--steps", "4", "--unroll", "3")
+    assert r.returncode == 0, r.stderr[-2000:]
+    ck = torch.load(tmp_path / "ckpt_last.pt", map_location="cpu", weights_only=False)
+    assert ck["step"] == 4
+    rows = [json.loads(l) for l in (tmp_path / "metrics.jsonl").read_text().splitlines()]
+    assert all(np.isfinite(r_["loss"]) for r_ in rows)

@@ -1,0 +1,40 @@
+{
+ "params": 6774755,
+ "config": {
+  "channels": [
+   32,
+   64,
+   96,
+   128
+  ],
+  "depths": [
+   2,
+   2,
+   2,
+   2
+  ],
+  "attn": [
+   false,
+   false,
+   false,
+   false
+  ],
+  "cond_channels": 256,
+  "num_ctx": 4,
+  "img_channels": 3,
+  "sigma_data": 0.5,
+  "sigma_offset_noise": 0.3,
+  "p_mean": -0.4,
+  "p_std": 1.2,
+  "sigma_min": 0.002,
+  "sigma_max_train": 20.0,
+  "ctx_noise_max": 0.5,
+  "ctx_noise_prob": 0.9
+ },
+ "checkpoint_step": 3000,
+ "sigma_max": 5.0,
+ "sigma_min": 0.002,
+ "rho": 7.0,
+ "sigma_data": 0.5,
+ "sigma_offset_noise": 0.3
+}
