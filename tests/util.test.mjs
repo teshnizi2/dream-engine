@@ -42,3 +42,31 @@ test('psnr: identical frames cap at 99 dB, a constant offset of 10 levels gives 
   assert.equal(psnr(a, a), 99);
   assert.ok(Math.abs(psnr(a, b) - 20 * Math.log10(25.5)) < 1e-9);
 });
+
+import { eulerSample, quantiseFrame } from '../site/js/util.mjs';
+
+test('euler sampler returns the clean frame for a perfect denoiser, for 1, 2 and 3 steps', async () => {
+  const x0 = Float32Array.from({ length: N }, (_, i) => Math.sin(i * 0.37));
+  for (const steps of [1, 2, 3]) {
+    const sg = buildSigmas(steps);
+    const rng = new Rng(3);
+    const x = Float32Array.from({ length: N }, () => rng.randn() * sg[0]);
+    let calls = 0;
+    await eulerSample(x, sg, async () => { calls++; return x0; });
+    assert.equal(calls, steps);
+    let maxd = 0;
+    for (let i = 0; i < N; i++) maxd = Math.max(maxd, Math.abs(x[i] - x0[i]));
+    assert.ok(maxd < 1e-5, `steps ${steps}: max diff ${maxd}`);
+  }
+});
+
+test('quantiseFrame clamps to [-1, 1], rounds to the 8-bit grid and writes both CHW floats and HWC bytes', () => {
+  const x = new Float32Array(N);
+  x[0] = 1.7; x[1] = -3; x[2] = 0.0; x[PIX] = 0.5;            // red of pixels 0,1,2 and green of pixel 0
+  const chw = new Float32Array(N), rgb = new Uint8Array(N);
+  quantiseFrame(x, chw, rgb);
+  assert.equal(rgb[0], 255); assert.equal(rgb[3], 0); assert.equal(rgb[6], Math.floor(127.5 + 0.5));
+  assert.equal(rgb[1], Math.floor((0.5 + 1) * 127.5 + 0.5));      // green of pixel 0 (HWC order)
+  assert.equal(chw[0], 1); assert.equal(chw[1], -1);
+  assert.ok(Math.abs(chw[PIX] - (rgb[1] / 127.5 - 1)) < 1e-7);
+});

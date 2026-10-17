@@ -17,5 +17,5 @@ mkdir -p results
 IFS='+' read -ra LIST <<< "${RUNS:?RUNS}"
 for r in "${LIST[@]}"; do
   echo "== $r"
-  python eval.py --ckpt "runs/$r/final_ema.pt" --name "eval2_$r" --no-figs --device cuda --episodes "${EPISODES:-16}" --long "${LONG:-256}" --n-val 256 --bank 12000
+  python eval.py --ckpt "runs/$r/final_ema.pt" --name "eval2_$r" --no-figs --device cuda --episodes "${EPISODES:-16}" --long "${LONG:-256}" --n-val 256 --bank 12000 --steps "${PSTEPS:-1}" --init "${PINIT:-edm}" --ctx-sigma "${PCTX:--1}"
 done

@@ -16,5 +16,6 @@ conda activate "$HOME/dream-engine/env"
 mkdir -p results media
 CK="runs/${RUN:?RUN}/${CKPT:-final_ema.pt}"
 NAME="${NAME:-$RUN}"
-python eval.py --ckpt "$CK" --name "$NAME" --device cuda --episodes "${EPISODES:-16}" --long "${LONG:-512}" --n-val 256 --bank 20000
+python eval.py --ckpt "$CK" --name "$NAME" --device cuda --episodes "${EPISODES:-16}" --long "${LONG:-512}" --n-val 256 --bank 20000 \
+  --steps "${PSTEPS:-2}" --init "${PINIT:-unit}" --ctx-sigma "${PCTX:-0.05}"
 python tools/probe_sampler.py --ckpt "$CK" --name "$NAME" --device cuda

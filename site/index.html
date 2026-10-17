@@ -24,7 +24,7 @@
       <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6" fill="#e8ecf5"/><rect x="9" y="1" width="6" height="6" fill="#2e3a52"/><rect x="1" y="9" width="6" height="6" fill="#2e3a52"/><rect x="9" y="9" width="6" height="6" fill="#f59e0b"/></svg>
       <div>
         <h1>dream <em>engine</em></h1>
-        <p class="tag">A diffusion model that learned a maze game from its pixels is now the game. Left, the real engine. Right, the network imagining every frame from your keypresses, with no game code.</p>
+        <p class="tag">A diffusion model that learned a maze game from its pixels is now the game. REAL is the engine. DREAM is the network imagining every frame from the same keypresses, with no game code.</p>
       </div>
     </div>
     <nav class="top-actions" aria-label="Page">
@@ -60,6 +60,21 @@
       <div class="mapbox"><canvas id="cv-map" class="minimap" width="96" height="96" aria-label="Top-down map with the real player position"></canvas><span class="lab">real position</span></div>
     </div>
   </main>
+
+  <div class="touchpad" id="touchpad" aria-label="Touch controls">
+    <div class="tp-left">
+      <button class="tp" data-k="L" aria-label="Turn left">◀</button>
+      <button class="tp" data-k="R" aria-label="Turn right">▶</button>
+    </div>
+    <div class="tp-mid">
+      <button class="tp sm" data-k="Q" aria-label="Strafe left">Q</button>
+      <button class="tp sm" data-k="E" aria-label="Strafe right">E</button>
+    </div>
+    <div class="tp-right">
+      <button class="tp" data-k="F" aria-label="Forward">▲</button>
+      <button class="tp" data-k="B" aria-label="Back">▼</button>
+    </div>
+  </div>
 
   <section class="controls" aria-label="Controls">
     <button class="btn primary" id="btn-wake" title="Re-seed the dream with the last 4 real frames (R)">Wake up <kbd>R</kbd></button>
@@ -100,28 +115,13 @@
   </footer>
 </div>
 
-<div class="touchpad" id="touchpad" aria-label="Touch controls">
-  <div class="tp-left">
-    <button class="tp" data-k="L" aria-label="Turn left">◀</button>
-    <button class="tp" data-k="R" aria-label="Turn right">▶</button>
-  </div>
-  <div class="tp-mid">
-    <button class="tp sm" data-k="Q" aria-label="Strafe left">Q</button>
-    <button class="tp sm" data-k="E" aria-label="Strafe right">E</button>
-  </div>
-  <div class="tp-right">
-    <button class="tp" data-k="F" aria-label="Forward">▲</button>
-    <button class="tp" data-k="B" aria-label="Back">▼</button>
-  </div>
-</div>
-
 <div class="scrim" id="scrim" hidden></div>
 <aside class="drawer" id="drawer" aria-hidden="true" aria-label="About this demo" tabindex="-1">
   <button class="btn ghost close" id="btn-close" aria-label="Close">Close</button>
   <h2>About</h2>
 
   <h3>What you are looking at</h3>
-  <p>Both panels get the same keypresses. The left one is a tiny raycaster, ordinary game code on a 16×16 map. The right one contains no game code at all: a neural network looks at the last four frames it produced and the last four actions, and <em>imagines the next frame</em>. Then it feeds that frame back in. After the first four frames (copied from the real game), everything you see on the right is imagination.</p>
+  <p>Both panels get the same keypresses. REAL is a tiny raycaster, ordinary game code on a 16×16 map. DREAM contains no game code at all: a neural network looks at the last four frames it produced and the last four actions, and <em>imagines the next frame</em>. Then it feeds that frame back in. After the first four frames (copied from the real game), everything you see in the DREAM panel is imagination.</p>
 
   <h3>How it works</h3>
   <svg class="diagram" viewBox="0 0 440 118" role="img" aria-label="Last 4 frames and actions go into a U-Net that denoises noise into the next frame, which is fed back">

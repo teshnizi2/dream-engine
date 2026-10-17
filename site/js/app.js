@@ -57,8 +57,12 @@ function fitScale() {
   let s;
   const w = innerWidth, h = innerHeight;
   const dreamOnly = body.classList.contains('dreamonly');
+  document.documentElement.style.removeProperty('--sr');
   if (CAPTURE) s = 7;
-  else if (w <= 760) s = Math.max(3, Math.min(dreamOnly ? 6 : 5, Math.floor((w - 72) / 64)));
+  else if (w <= 760) {
+    s = Math.max(3, Math.min(dreamOnly ? 6 : 5, Math.floor((w - 72) / 64)));
+    if (!dreamOnly) document.documentElement.style.setProperty('--sr', Math.max(3, s - 1));     // the real panel a notch smaller so both fit on one screen
+  }
   else {
     const panels = dreamOnly ? 1 : 2;
     const keysCol = w >= 1060 ? 132 + 52 : 0;                 // keys sit between the panels on wide screens
@@ -240,6 +244,8 @@ $('btn-about').addEventListener('click', () => (drawer.classList.contains('open'
 $('btn-close').addEventListener('click', closeDrawer);
 scrim.addEventListener('click', closeDrawer);
 addEventListener('resize', () => { fitScale(); drawDrift(); });
+addEventListener('load', fitScale);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => fitScale()).observe(document.documentElement);   // viewport changes that fire no resize event (phones)
 document.addEventListener('visibilitychange', () => { if (document.hidden) { held.clear(); setKeyLights(held); } });
 
 // ------------------------------------------------------------------ loading
@@ -301,6 +307,7 @@ async function boot() {
     stopStatic();
     ready = true;
     body.classList.remove('loading');
+    fitScale();
     wake();
     if (dream.info.backend === 'wasm') toast('WebGPU is not available here, so the dream runs on the slow WASM path. Expect a few frames per second.');
     if (CAPTURE) installCapture(); else run();

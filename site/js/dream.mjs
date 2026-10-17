@@ -7,8 +7,8 @@
 // act [1,4,9] (one-hot), ctx_sigma [1] -> denoised [1,3,64,64].
 
 import * as ort from 'onnxruntime-web';
-import { SIZE, PIX, N, K, buildSigmas, Rng } from './util.mjs';
-export { SIZE, PIX, N, K, buildSigmas, Rng, rgbToChw, psnr } from './util.mjs';
+import { SIZE, PIX, N, K, buildSigmas, Rng, eulerSample, quantiseFrame } from './util.mjs';
+export { SIZE, PIX, N, K, buildSigmas, Rng, rgbToChw, psnr, eulerSample, quantiseFrame } from './util.mjs';
 
 const POOL = 1 << 20;
 
@@ -170,23 +170,11 @@ export class Dream {
     const sg = this.sigmas;
     const x = this.xArr;
     this._noise(x, this.initScale === 'edm' ? sg[0] : 1.0);
-    for (let i = 0; i < this.steps; i++) {
-      const sigma = sg[i];
-      const D = await this._nfe(x, sigma);
-      const dt = (sg[i + 1] - sigma) / sigma;
-      for (let j = 0; j < N; j++) x[j] += (x[j] - D[j]) * dt;
-    }
+    await eulerSample(x, sg, (xx, sigma) => this._nfe(xx, sigma));
     // clamp, quantise to the 8-bit grid, and keep the quantised frame as the next context frame
     const next = this.frames[0];            // recycle the oldest frame's storage
     const rgb = new Uint8Array(N);
-    for (let c = 0; c < 3; c++) {
-      for (let p = 0; p < PIX; p++) {
-        const v = Math.min(1, Math.max(-1, x[c * PIX + p]));
-        const b = Math.floor((v + 1) * 127.5 + 0.5);
-        next[c * PIX + p] = b / 127.5 - 1;
-        rgb[p * 3 + c] = b;
-      }
-    }
+    quantiseFrame(x, next, rgb);
     this.frames.push(this.frames.shift());   // the recycled array becomes the newest frame
     this.lastMs = performance.now() - t0;
     return { chw: next, rgb, ms: this.lastMs };

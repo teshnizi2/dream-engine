@@ -10,7 +10,7 @@ ap.add_argument("--eval", required=True)
 ap.add_argument("--out", default=str(ROOT / "site/models/eval_summary.json"))
 a = ap.parse_args()
 r = json.loads(pathlib.Path(a.eval).read_text())
-ro = r["rollout_euler3"]
+ro = r.get("rollout_primary") or r["rollout_euler3"]
 summary = {
     "source": a.eval, "checkpoint_step": r["step"], "params": r["params"],
     "psnr_at": {k: v for k, v in ro["psnr_at"].items()},

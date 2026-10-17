@@ -46,3 +46,26 @@ export function psnr(a, b) {
   const mse = se / a.length;
   return mse < 1e-9 ? 99 : 10 * Math.log10((255 * 255) / mse);
 }
+
+// Euler sampler of the EDM ODE, in place on x (sigma_0 noise). nfe(x, sigma) -> D(x; sigma) as a Float32Array.
+export async function eulerSample(x, sigmas, nfe) {
+  for (let i = 0; i < sigmas.length - 1; i++) {
+    const sigma = sigmas[i];
+    const D = await nfe(x, sigma);
+    const dt = (sigmas[i + 1] - sigma) / sigma;
+    for (let j = 0; j < x.length; j++) x[j] += (x[j] - D[j]) * dt;
+  }
+  return x;
+}
+
+// Clamp to [-1, 1], round to the 8-bit grid; writes CHW floats (the next context frame) and HWC bytes (the canvas).
+export function quantiseFrame(x, chwOut, rgbOut) {
+  for (let c = 0; c < 3; c++) {
+    for (let p = 0; p < PIX; p++) {
+      const v = Math.min(1, Math.max(-1, x[c * PIX + p]));
+      const b = Math.floor((v + 1) * 127.5 + 0.5);
+      chwOut[c * PIX + p] = b / 127.5 - 1;
+      rgbOut[p * 3 + c] = b;
+    }
+  }
+}

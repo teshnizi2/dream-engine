@@ -112,6 +112,7 @@ kbd {
   position: relative; width: calc(64px * var(--s)); height: calc(64px * var(--s)); border-radius: 7px; overflow: hidden;
   background: #05070b; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
 }
+.panel.real .screen { width: calc(64px * var(--sr, var(--s))); height: calc(64px * var(--sr, var(--s))); }
 .screen canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
 .scan {
   position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .2s;
@@ -166,9 +167,7 @@ body.dreamonly .stage { grid-template-columns: auto auto; }
 .touchpad { display: none; }
 @media (pointer: coarse), (max-width: 760px) {
   .touchpad {
-    display: flex; position: sticky; bottom: 0; z-index: 5; justify-content: space-between; align-items: flex-end;
-    padding: 10px 12px max(14px, env(safe-area-inset-bottom)); gap: 8px;
-    background: linear-gradient(to top, rgba(14,17,23,.96) 55%, rgba(14,17,23,0));
+    display: flex; justify-content: space-between; align-items: flex-end; padding: 2px 0 0; gap: 8px;
   }
   .tp-left, .tp-right { display: flex; gap: min(10px, 2.6vw); }
   .tp-mid { display: flex; flex-direction: column; gap: 6px; }
@@ -202,8 +201,11 @@ body.dreamonly .stage { grid-template-columns: auto auto; }
 
 /* ---------------------------------------------------------------- small screens */
 @media (max-width: 760px) {
-  .top { flex-direction: column; gap: 12px; }
-  .top-actions { align-self: flex-start; }
+  .top { flex-direction: row; align-items: flex-start; gap: 10px; }
+  .tag { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; margin-top: 6px; }
+  h1 { font-size: 34px; }
+  .mark { width: 26px; height: 26px; margin-top: 4px; }
+  .app { gap: 12px; }
   .stage { grid-template-columns: 1fr; justify-items: center; }
   .cell.wide { grid-column: span 2; }
   .panel { width: fit-content; max-width: 100%; }

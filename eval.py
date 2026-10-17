@@ -73,7 +73,7 @@ HOLD_ACTIONS = {"forward": (1, 0, 0), "back": (2, 0, 0), "turn_left": (0, 0, 1),
                 "strafe_left": (0, 1, 0), "strafe_right": (0, 2, 0), "forward+left": (1, 0, 1), "forward+right": (1, 0, 2)}
 
 
-def hold_action_rollouts(world, denoise, n=24, horizon=24, steps=3, ctx_sigma=0.1, init="edm", seed=5, device="cpu"):
+def hold_action_rollouts(world, denoise, n=24, horizon=24, steps=1, ctx_sigma=0.05, init="edm", seed=5, device="cpu"):
     """Hold one key for `horizon` frames from n random poses (4 standing-still frames as context): how well does the
     dream follow each control? Returns PSNR at a few frame indices per action, and the copy-the-last-frame baseline."""
     from data.policy import ExplorationPolicy
@@ -100,6 +100,30 @@ def hold_action_rollouts(world, denoise, n=24, horizon=24, steps=3, ctx_sigma=0.
         res[name] = {"dream_psnr_at": {str(i): float(r["psnr"][i - 1]) for i in idx},
                      "freeze_psnr_at": {str(i): float(fz[i - 1]) for i in idx}}
     return res
+
+
+def spin_test(world, denoise, n=16, steps=1, ctx_sigma=0.05, init="edm", seed=11, device="cpu"):
+    """Hold 'turn right' for a full revolution (72 steps of 5 degrees) from random poses: the real game ends on exactly the
+    start view. Reports how close the dream gets after 8 / 24 / 36 / 72 frames and the PSNR of the dream's frame 72 against
+    the start view (a world with memory would return to it)."""
+    from data.policy import ExplorationPolicy
+    rng = np.random.default_rng(seed)
+    st = ExplorationPolicy(world, n, rng, respawn_prob=0.0).random_states(n)
+    frames = [world.render(st)] * 4
+    acts = [np.zeros((n, 3), np.int64)] * 3
+    for _ in range(72):
+        a = np.tile(np.array((0, 0, 2), np.int64), (n, 1))
+        acts.append(a)
+        st = world.step(st, a)
+        frames.append(world.render(st))
+    fr = ev._to_unit(np.stack(frames, 1))
+    traj = {"frames": fr, "actions": torch.from_numpy(np.stack(acts, 1))}
+    r = ev.rollout_metrics(denoise, traj, horizon=72, steps=steps, order=1, ctx_sigma=ctx_sigma, init=init, batch=n, return_frames=True)
+    start = fr[:, 3]
+    back = metrics.psnr(((r["frames"][:, 71] + 1) / 2), ((start + 1) / 2)).clamp(max=100)
+    real_back = metrics.psnr(((fr[:, 4 + 71] + 1) / 2), ((start + 1) / 2)).clamp(max=100)
+    return {"episodes": n, "dream_psnr_at": {str(k): float(r["psnr"][k - 1]) for k in (1, 8, 24, 36, 72)},
+            "dream_frame72_vs_start_view_psnr": float(back.mean()), "real_frame72_vs_start_view_psnr": float(real_back.mean())}
 
 
 def frozen_baseline(traj, horizon, K=4):
@@ -200,6 +224,9 @@ def main():
     ap.add_argument("--long", type=int, default=512, help="longest rollout (frames)")
     ap.add_argument("--episodes", type=int, default=8, help="episodes for the longest rollout")
     ap.add_argument("--bank", type=int, default=12000, help="size of the real-frame bank for the validity metric")
+    ap.add_argument("--steps", type=int, default=1, help="Euler steps of the primary rollout configuration (the demo default)")
+    ap.add_argument("--init", default="edm", choices=["edm", "unit"], help="sampler start of the primary configuration")
+    ap.add_argument("--ctx-sigma", type=float, default=-1.0, help="context noise of the primary configuration (negative: probe 0/0.05/0.1/0.2)")
     ap.add_argument("--no-figs", action="store_true")
     ap.add_argument("--quick", action="store_true", help="smaller sweeps (smoke checks)")
     a = ap.parse_args()
@@ -252,26 +279,30 @@ def main():
     # choose the context-noise level that gives the best 128-frame drift (the 1-step score alone prefers 0)
     probe = {k: v[:8] for k, v in traj.items()}
     cs_scores = {}
-    for cs in ((0.0, 0.1) if a.quick else (0.0, 0.05, 0.1, 0.2)):
-        r = ev.rollout_metrics(model.denoise, probe, horizon=min(128, L), steps=3, ctx_sigma=cs, init="edm")
-        cs_scores[str(cs)] = float(r["psnr"].mean())
-    best_cs = float(max(cs_scores, key=cs_scores.get))
+    if a.ctx_sigma >= 0:
+        best_cs = a.ctx_sigma
+    else:
+        for cs in ((0.0, 0.1) if a.quick else (0.0, 0.05, 0.1, 0.2)):
+            r = ev.rollout_metrics(model.denoise, probe, horizon=min(128, L), steps=a.steps, ctx_sigma=cs, init=a.init)
+            cs_scores[str(cs)] = float(r["psnr"].mean())
+        best_cs = float(max(cs_scores, key=cs_scores.get))
     out["ctx_sigma_probe_mean_psnr_128"] = cs_scores
     out["chosen_ctx_sigma"] = best_cs
-    print("ctx_sigma probe", cs_scores, "-> chosen", best_cs, flush=True)
+    out["primary_config"] = {"steps": a.steps, "order": 1, "init": a.init, "ctx_sigma": best_cs}
+    print("ctx_sigma probe", cs_scores, "-> primary config", out["primary_config"], flush=True)
 
     curves = {}
     long_traj = {k: v[:a.episodes] for k, v in traj.items()}
-    r = ev.rollout_metrics(model.denoise, long_traj, horizon=L, steps=3, ctx_sigma=best_cs, init="edm", return_frames=True, batch=8)
-    curves[f"{n_params / 1e6:.1f}M EDM, 3 Euler steps, ctx noise {best_cs}"] = r["psnr"]
-    out["rollout_euler3"] = {"psnr_curve": r["psnr"].tolist(), "ssim_curve": r["ssim"].tolist(),
+    r = ev.rollout_metrics(model.denoise, long_traj, horizon=L, steps=a.steps, ctx_sigma=best_cs, init=a.init, return_frames=True, batch=8)
+    curves[f"{n_params / 1e6:.1f}M EDM, {a.steps} Euler step(s), ctx noise {best_cs}"] = r["psnr"]
+    out["rollout_primary"] = {"config": out["primary_config"],"psnr_curve": r["psnr"].tolist(), "ssim_curve": r["ssim"].tolist(),
                              "psnr_at": summarize(r["psnr"]), "ssim_at": summarize(r["ssim"]),
                              "mean_psnr_first32": float(r["psnr"][:32].mean()),
                              "mean_psnr_first128": float(r["psnr"][:128].mean()),
                              "mean_psnr_all": float(r["psnr"].mean()), "episodes": a.episodes, "horizon": L}
-    out["rollout_euler3"]["frames_until_psnr_below_25db"] = first_below(r["psnr"], 25.0)
-    out["rollout_euler3"]["frames_until_psnr_below_20db"] = first_below(r["psnr"], 20.0)
-    out["rollout_euler3"]["sharpness_ratio_last32"] = grad_mag(r["frames"][:, -32:]) / grad_mag(long_traj["frames"][:, 4 + L - 32:4 + L])
+    out["rollout_primary"]["frames_until_psnr_below_25db"] = first_below(r["psnr"], 25.0)
+    out["rollout_primary"]["frames_until_psnr_below_20db"] = first_below(r["psnr"], 20.0)
+    out["rollout_primary"]["sharpness_ratio_last32"] = grad_mag(r["frames"][:, -32:]) / grad_mag(long_traj["frames"][:, 4 + L - 32:4 + L])
     # does the dream stay a valid game frame even when it no longer matches the true frame?
     bank = ev.make_frame_bank(world, n=a.bank if not a.quick else 4000)
     gt_long = long_traj["frames"][:, 4:4 + L]
@@ -284,27 +315,29 @@ def main():
     print("validity (nearest real frame PSNR): dream %.1f vs real %.1f" % (nn_dream.mean(), nn_real.mean()), flush=True)
     for h, n_ep in ((32, 32), (128, 16)):
         if h <= L:
-            rr = ev.rollout_metrics(model.denoise, {k: v[:n_ep] for k, v in traj.items()}, horizon=h, steps=3,
-                                    ctx_sigma=best_cs, init="edm")
+            rr = ev.rollout_metrics(model.denoise, {k: v[:n_ep] for k, v in traj.items()}, horizon=h, steps=a.steps,
+                                    ctx_sigma=best_cs, init=a.init)
             out[f"rollout_{h}"] = {"episodes": n_ep, "mean_psnr": float(rr["psnr"].mean()), "final_psnr": float(rr["psnr"][-1]),
                                    "mean_ssim": float(rr["ssim"].mean()), "final_ssim": float(rr["ssim"][-1])}
-    for name, steps, order in (("euler1", 1, 1), ("heun2", 2, 2)):
+    for name, steps, order in (("euler1", 1, 1), ("euler2", 2, 1), ("euler3", 3, 1), ("heun2", 2, 2)):
         rr = ev.rollout_metrics(model.denoise, {k: v[:8] for k, v in traj.items()}, horizon=min(128, L), steps=steps, order=order,
-                                ctx_sigma=best_cs, init="edm")
-        out[f"rollout128_{name}"] = {"mean_psnr": float(rr["psnr"].mean()), "final_psnr": float(rr["psnr"][-1])}
-        curves[f"{name} (128 frames)"] = rr["psnr"]
+                                ctx_sigma=best_cs, init=a.init)
+        out[f"rollout128_{name}"] = {"mean_psnr": float(rr["psnr"].mean()), "mean_psnr_first32": float(rr["psnr"][:32].mean()),
+                                     "final_psnr": float(rr["psnr"][-1])}
     fz_p, fz_s = frozen_baseline(long_traj, L)
     floor = uncorrelated_floor(long_traj, L)
     out["baseline_freeze_last_real_frame"] = {"psnr_at": summarize(fz_p), "ssim_at": summarize(fz_s)}
     out["baseline_unrelated_frame_psnr"] = float(floor.mean())
-    out["hold_one_key"] = hold_action_rollouts(world, model.denoise, steps=3, ctx_sigma=best_cs, device=str(dev))
+    out["hold_one_key"] = hold_action_rollouts(world, model.denoise, steps=a.steps, ctx_sigma=best_cs, init=a.init, device=str(dev))
+    out["spin_360"] = spin_test(world, model.denoise, steps=a.steps, ctx_sigma=best_cs, init=a.init)
+    print("360-degree spin:", out["spin_360"], flush=True)
     print("hold-one-key PSNR@8:", {k: round(v["dream_psnr_at"]["8"], 1) for k, v in out["hold_one_key"].items()}, flush=True)
     out["eval_wall_seconds"] = time.time() - t_start
 
     res = ROOT / "results"
     res.mkdir(exist_ok=True)
     (res / f"eval_{a.name}.json").write_text(json.dumps(out, indent=1))
-    print(json.dumps({k: out[k] for k in ("baseline_copy_last_frame", "one_step_samplers_ctx0.1", "rollout_euler3")
+    print(json.dumps({k: out[k] for k in ("baseline_copy_last_frame", "one_step_samplers_ctx0.1", "rollout_primary")
                       if k in out}, indent=1)[:3000])
     if not a.no_figs:
         media = ROOT / "media"

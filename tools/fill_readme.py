@@ -70,7 +70,7 @@ def build(a):
                     + table(["method", "PSNR dB", "SSIM", "model calls", "browser ms/frame"], rows)
                     + "\n\nSource: `" + a.eval + "`" + (", `" + a.fps + "`" if fps else "") + ".")
     # ---- drift
-    ro = ev["rollout_euler3"]
+    ro = ev.get("rollout_primary") or ev["rollout_euler3"]
     fz = ev["baseline_freeze_last_real_frame"]["psnr_at"]
     ks = [k for k in ("1", "4", "8", "16", "32", "64", "128", "256", "512") if k in ro["psnr_at"]]
     rows = [["dream (PSNR dB)"] + [f1(ro["psnr_at"][k]) for k in ks],
