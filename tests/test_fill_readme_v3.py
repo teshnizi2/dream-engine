@@ -53,3 +53,14 @@ def test_the_at_a_glance_line_states_the_verdict_in_one_sentence(tmp_path):
     populate(tmp_path, adopt=True)
     assert "met" in F.v3_glance(tmp_path) and "did not meet" not in F.v3_glance(tmp_path)
     assert F.v3_glance(tmp_path / "nowhere") == ""
+
+
+def test_the_limits_bullet_names_the_shipped_models_collapse_and_the_fate_of_v3(tmp_path):
+    import fill_readme as F
+    populate(tmp_path, adopt=False)
+    b = F.v3_limit(tmp_path)
+    assert b.startswith("* **") and "flat wall" in b and "not fixed" in b and "did not meet" in b and "stuck" in b and "%" in b
+    populate(tmp_path, adopt=True)
+    b = F.v3_limit(tmp_path)
+    assert "not fixed" not in b and "reduced" in b and "stuck" in b
+    assert F.v3_limit(tmp_path / "nowhere") == ""

@@ -165,6 +165,24 @@ def v3_glance(res=None):
             "v2 stays shipped and v3 is documented as a negative result (see \"What was tried\").")
 
 
+def v3_limit(res=None):
+    """The 'Honest limits' bullet about the flat-wall collapse of the shipped model, with the fate of v3 (empty if no final comparison)."""
+    res = pathlib.Path(res) if res else ROOT / "results"
+    fin = next((f for f in sorted(res.glob("prereg_final_*_vs_*.json"))), None)
+    fin = _load_abs(fin) if fin else None
+    if not fin:
+        return ""
+    new, ref, ad = fin["new"], fin["ref"], fin["adoption"]
+    ship = new if ad["adopt"] else ref
+    stuck = (f"in {100 * ship['dream_stuck_share']:.0f}% of frames 64 to 512 of a long dream the shipped model is stuck on a flat wall (no floor or ceiling for 32 frames in a row), "
+             f"against {100 * ship['real_stuck_share']:.0f}% for the real game's own path; the collapsed frames are smooth colour fields with far less structure than a real wall close-up")
+    if ad["adopt"]:
+        return (f"* **Long dreams still collapse onto flat wall views, less than in v2.** {stuck[0].upper() + stuck[1:]}. The v3 game's self-localising walls reduced the collapse rate from "
+                f"{ref['collapse']:.2f} to {new['collapse']:.2f} (pre-registered rule met); a full 360 degree spin still does not return to the start view.")
+    return (f"* **Long dreams collapse onto flat wall views (not fixed).** {stuck[0].upper() + stuck[1:]}. A pre-registered fix (v3: unique colour signatures on every wall face) "
+            f"did not meet its rule (collapse rate {new['collapse']:.2f} against {ref['collapse']:.2f}), so v2 stays shipped; a full 360 degree spin does not return to the start view either.")
+
+
 def ablation_tables():
     """What was tried (all single runs; results/ablation/*.json written by eval.py on ALICE)."""
     def ev(n):
@@ -476,6 +494,8 @@ def build(a):
     glance = v3_glance()
     text = text.replace("@@V3_GLANCE@@\n", glance + "\n" if glance else "")
     limits = (ROOT / a.limits).read_text() if a.limits and (ROOT / a.limits).exists() else "@@LIMITS@@"
+    lim = v3_limit()
+    limits = limits.replace("@@V3_LIMIT@@\n", lim + "\n" if lim else "").replace("@@V3_LIMIT@@", lim)
     text = text.replace("@@LIMITS@@", limits.strip())
     for k, v in tok.items():
         text = text.replace(f"@@{k}@@", v)
