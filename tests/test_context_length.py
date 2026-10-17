@@ -151,6 +151,9 @@ def test_train_script_records_and_uses_the_game_spec(tmp_path):
     assert r.returncode == 0, r.stderr[-2000:]
     ck = torch.load(tmp_path / "ckpt_last.pt", map_location="cpu", weights_only=False)
     assert pathlib.Path(ck["args"]["game"]).name == "spec.json"
+    # the final EMA checkpoint is what evaluation and export load: it must carry the game too (a v3 model evaluated on the v2 game
+    # would be silently wrong)
+    assert ex.ckpt_game(str(tmp_path / "final_ema.pt")).endswith("spec.json")
 
 
 # ------------------------------------------------------------------ export
@@ -199,3 +202,12 @@ def test_eval_script_runs_end_to_end_for_an_8_context_checkpoint(tmp_path, monke
     assert out["num_ctx"] == 8 and out["game"].endswith("spec_v2.json")
     assert len(out["rollout_primary"]["psnr_curve"]) == 12
     assert out["spin_360"]["episodes"] == 2 and np.isfinite(out["spin_360"]["dream_frame72_vs_start_view_psnr"])
+
+
+def test_a_final_checkpoint_without_args_takes_the_game_from_the_resume_checkpoint_next_to_it(tmp_path):
+    """Runs started before final_ema.pt carried its args: their game is in ckpt_last.pt in the same folder."""
+    cfg = {"channels": [16, 16, 16, 16]}
+    torch.save({"ema": {}, "config": cfg, "step": 5}, tmp_path / "final_ema.pt")
+    assert ex.ckpt_game(str(tmp_path / "final_ema.pt")) == "game/spec_v2.json"          # nothing recorded anywhere: the v2 game
+    torch.save({"ema": {}, "config": cfg, "step": 5, "args": {"game": "game/spec_v3.json"}}, tmp_path / "ckpt_last.pt")
+    assert ex.ckpt_game(str(tmp_path / "final_ema.pt")) == "game/spec_v3.json"

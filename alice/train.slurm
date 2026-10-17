@@ -52,6 +52,6 @@ fi
 # the pre-registered evaluation of docs/PREREG-v3.md (64 episodes x 512 frames, ~3 min on an A100)
 if [ "${RUN_PREREG:-0}" = "1" ] && [ -f "runs/$RUN/final_ema.pt" ]; then
   mkdir -p results
-  python eval_prereg.py --ckpt "runs/$RUN/final_ema.pt" --name "$RUN" --episodes "${PREREG_EPISODES:-64}" --device cuda
+  python eval_prereg.py --ckpt "runs/$RUN/final_ema.pt" --name "$RUN" --game "$GAME" --episodes "${PREREG_EPISODES:-64}" --device cuda
 fi
 echo "finished $(date)"

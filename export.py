@@ -174,7 +174,11 @@ def ckpt_game(ckpt_path: str) -> str:
     """The game spec (path relative to the repo root) a checkpoint was trained on; checkpoints from before v3 did not
     record it and were all trained on the v2 game."""
     ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    return (ck.get("args") or {}).get("game") or "game/spec_v2.json"
+    game = (ck.get("args") or {}).get("game")
+    sibling = pathlib.Path(ckpt_path).with_name("ckpt_last.pt")            # runs from before final_ema.pt carried its args
+    if game is None and sibling.exists() and sibling != pathlib.Path(ckpt_path):
+        game = (torch.load(sibling, map_location="cpu", weights_only=False).get("args") or {}).get("game")
+    return game or "game/spec_v2.json"
 
 
 def verify(model: Denoiser, onnx_path: str, cases) -> dict:

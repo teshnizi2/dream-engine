@@ -186,10 +186,11 @@ def main(argv=None):
         save_atomic({"model": model.state_dict(), "ema": ema.state_dict(), "opt": opt.state_dict(), "step": step,
                      "config": cfg.__dict__, "args": vars(a), "resumes": resumes,
                      "elapsed_s": elapsed_prev + (time.time() - t0)}, ck_path)
+        # "args" carries the game the model was trained on (and the rest of the recipe): evaluation and export read it
         if a.milestone_every and step % a.milestone_every == 0:
-            save_atomic({"ema": ema.state_dict(), "config": cfg.__dict__, "step": step}, out / f"ema_step{step}.pt")
+            save_atomic({"ema": ema.state_dict(), "config": cfg.__dict__, "step": step, "args": vars(a)}, out / f"ema_step{step}.pt")
         if final:
-            save_atomic({"ema": ema.state_dict(), "config": cfg.__dict__, "step": step}, out / "final_ema.pt")
+            save_atomic({"ema": ema.state_dict(), "config": cfg.__dict__, "step": step, "args": vars(a)}, out / "final_ema.pt")
 
     log_f = open(out / "metrics.jsonl", "a")
     t0 = time.time()
