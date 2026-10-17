@@ -240,6 +240,15 @@ body.capture .cell.wide { grid-column: span 2; }
 body.capture .val { font-size: 25px; }
 body.capture .drift canvas { height: 120px; }
 body.capture .credits { display: block; font-size: 12px; margin-top: auto; }
+.capnote { display: none; }
+body.capture .capnote { display: block; color: #b4bdd2; font: 400 17px/1.5 var(--font); margin: 6px 6px 0; text-wrap: balance; }
+body.capture .capnote b { color: var(--amber); font-weight: 600; }
+
+body.capture.square { height: 1080px; }
+body.capture.square .app { height: 1080px; padding: 34px 40px 22px; gap: 12px; }
+body.capture.square .tag, body.capture.square .deck, body.capture.square .credits, body.capture.square .keys-note { display: none; }
+body.capture.square h1 { font-size: 56px; }
+body.capture.square .drift canvas { height: 96px; }
 
 @media (prefers-reduced-motion: reduce) {
   .dot.live { animation: none; } .panel.dream.woke { animation: none; }

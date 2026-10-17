@@ -1,0 +1,117 @@
+{
+ "script": "tools/verify_onnx_browser.mjs",
+ "date": "2026-10-17T13:49:34.264Z",
+ "adapter": {
+  "description": "",
+  "features": [
+   "shader-f16"
+  ]
+ },
+ "cases": [
+  {
+   "model": "dream_fp32",
+   "ep": "webgpu",
+   "capture": false,
+   "vecs": [
+    {
+     "sigma": 5,
+     "max_abs_diff": 0.000001341104507446289
+    },
+    {
+     "sigma": 0.30000001192092896,
+     "max_abs_diff": 9.834766387939453e-7
+    },
+    {
+     "sigma": 0.019999999552965164,
+     "max_abs_diff": 5.960464477539062e-7
+    }
+   ],
+   "max_abs_diff": 0.000001341104507446289,
+   "mean_abs_diff": 1.305501705751845e-7
+  },
+  {
+   "model": "dream_fp32",
+   "ep": "webgpu",
+   "capture": true,
+   "vecs": [
+    {
+     "sigma": 5,
+     "max_abs_diff": 0.000001341104507446289
+    },
+    {
+     "sigma": 0.30000001192092896,
+     "max_abs_diff": 9.834766387939453e-7
+    },
+    {
+     "sigma": 0.019999999552965164,
+     "max_abs_diff": 5.960464477539062e-7
+    }
+   ],
+   "max_abs_diff": 0.000001341104507446289,
+   "mean_abs_diff": 1.305501705751845e-7
+  },
+  {
+   "model": "dream_fp16",
+   "ep": "webgpu",
+   "capture": false,
+   "vecs": [
+    {
+     "sigma": 5,
+     "max_abs_diff": 0.007845282554626465
+    },
+    {
+     "sigma": 0.30000001192092896,
+     "max_abs_diff": 0.012722700834274292
+    },
+    {
+     "sigma": 0.019999999552965164,
+     "max_abs_diff": 0.0035158097743988037
+    }
+   ],
+   "max_abs_diff": 0.012722700834274292,
+   "mean_abs_diff": 0.0008112258229415501
+  },
+  {
+   "model": "dream_fp16",
+   "ep": "webgpu",
+   "capture": true,
+   "vecs": [
+    {
+     "sigma": 5,
+     "max_abs_diff": 0.007845282554626465
+    },
+    {
+     "sigma": 0.30000001192092896,
+     "max_abs_diff": 0.012722700834274292
+    },
+    {
+     "sigma": 0.019999999552965164,
+     "max_abs_diff": 0.0035158097743988037
+    }
+   ],
+   "max_abs_diff": 0.012722700834274292,
+   "mean_abs_diff": 0.0008112258229415501
+  },
+  {
+   "model": "dream_fp32",
+   "ep": "wasm",
+   "capture": false,
+   "vecs": [
+    {
+     "sigma": 5,
+     "max_abs_diff": 0.000007420778274536133
+    },
+    {
+     "sigma": 0.30000001192092896,
+     "max_abs_diff": 0.000013709068298339844
+    },
+    {
+     "sigma": 0.019999999552965164,
+     "max_abs_diff": 0.000005260109901428223
+    }
+   ],
+   "max_abs_diff": 0.000013709068298339844,
+   "mean_abs_diff": 0.0000014242267462173507
+  }
+ ]
+}

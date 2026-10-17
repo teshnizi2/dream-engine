@@ -131,3 +131,10 @@ def test_train_script_can_start_from_another_runs_ema_weights(tmp_path):
     assert ck["step"] == 3                                    # a fresh step counter and optimiser ...
     k = next(k for k in src["ema"] if "conv_in.weight" in k)
     assert (ck["model"][k] - src["ema"][k]).abs().max() < 0.05   # ... but the weights started from the source EMA
+
+
+def test_train_script_supports_rollout_context_training(tmp_path):
+    r = run_train(tmp_path, "--steps", "4", "--rollout-ctx", "2", "--rollout-prob", "0.7")
+    assert r.returncode == 0, r.stderr[-2000:]
+    ck = torch.load(tmp_path / "ckpt_last.pt", map_location="cpu", weights_only=False)
+    assert ck["step"] == 4

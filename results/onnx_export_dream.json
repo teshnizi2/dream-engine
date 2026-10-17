@@ -1,6 +1,6 @@
 {
- "script": "python export.py --ckpt runs/smoke_alice/final_ema.pt --out site/models --name dream --fp16 --verify",
- "checkpoint_step": 3000,
+ "script": "python export.py --ckpt runs/w2_B_final_ema.pt --out site/models --name dream --fp16 --verify --ctx-sigma 0.05 --init unit --default-steps 2",
+ "checkpoint_step": 20000,
  "params": 6774755,
  "fp32": {
   "n_nodes": 719,
@@ -64,11 +64,11 @@
   "opset": 17
  },
  "verify_fp32": {
-  "max_abs_diff_vs_pytorch": 2.086162567138672e-06,
+  "max_abs_diff_vs_pytorch": 2.8312206268310547e-06,
   "cases": 6
  },
  "verify_fp16": {
-  "max_abs_diff_vs_pytorch": 0.0017091259360313416,
+  "max_abs_diff_vs_pytorch": 0.002407371997833252,
   "cases": 6
  }
 }

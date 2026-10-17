@@ -3,3 +3,6 @@ torch==2.14.1
 numpy==2.5.4
 pillow==13.0.0
 pytest==9.1.1
+# figures made by eval.py on the cluster
+matplotlib==3.11.2
+imageio==2.38.1

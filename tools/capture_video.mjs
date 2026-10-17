@@ -15,7 +15,8 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) =>
 const FPS = +(args.fps || 24);
 const tour = JSON.parse(fs.readFileSync(path.join(root, 'site/js/tour.json'), 'utf8')).actions;
 const N = Math.min(tour.length, +(args.max || tour.length));
-const W = +(args.width || 1080), H = +(args.height || 1350);
+const SQUARE = !!args.square;
+const W = +(args.width || 1080), H = +(args.height || (SQUARE ? 1080 : 1350));
 const framesDir = path.join(root, 'media/frames');
 fs.rmSync(framesDir, { recursive: true, force: true });
 fs.mkdirSync(framesDir, { recursive: true });
@@ -30,7 +31,7 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
   const q = new URLSearchParams({ capture: '1', steps: args.steps || '3', seed: args.seed || '1234', ...(args.dtype ? { dtype: args.dtype } : {}),
-    ...(args.ms ? { ms: args.ms } : {}), ...(args['fps-label'] ? { fps: args['fps-label'] } : {}) });
+    ...(args.ms ? { ms: args.ms } : {}), ...(args.note ? { note: args.note } : {}), ...(SQUARE ? { square: '1' } : {}), ...(args['fps-label'] ? { fps: args['fps-label'] } : {}) });
   page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 200)));
   await page.goto(`http://127.0.0.1:${srv.port}/site/index.html?${q}`);
   await page.waitForFunction('window.__captureReady === true', { timeout: 180000 });

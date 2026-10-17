@@ -148,6 +148,27 @@ class Denoiser(nn.Module):
         s_c = s_c * (torch.rand(B, device=ctx.device) < c.ctx_noise_prob).float()
         return ctx + torch.randn_like(ctx) * s_c.view(B, 1, 1, 1, 1), s_c
 
+    def loss_rollout(self, frames: Tensor, act: Tensor, rollout: int = 2, prob: float = 0.5, ctx_sigma: float = 0.05):
+        """Scheduled sampling with the model's own frames. frames [B, K+rollout+1, 3, H, W], act [B, K+rollout, 9].
+        For a random fraction `prob` of the batch the K context frames are NOT the real ones but what the model itself
+        generates (1 Euler step, 8-bit quantised, no gradient) when rolled `rollout` steps forward from the real first K
+        frames; the loss is the ordinary denoising loss on the real frame K+rollout given that imperfect context."""
+        from model.sampler import build_sigmas, sample_next
+        K = self.cfg.num_ctx
+        B = frames.shape[0]
+        real_ctx = frames[:, rollout:rollout + K]
+        with torch.no_grad():
+            ctx = frames[:, :K].clone()
+            sig = build_sigmas(1, self.cfg.sigma_min, 5.0, 7.0, device=frames.device)
+            s_c = torch.full((B,), float(ctx_sigma), device=frames.device)
+            for i in range(rollout):
+                noisy = ctx + torch.randn_like(ctx) * ctx_sigma
+                nxt = sample_next(self.denoise, noisy, act[:, i:i + K], s_c, sig, order=1, quantize=True, init="unit")
+                ctx = torch.cat([ctx[:, 1:], nxt.unsqueeze(1)], dim=1)
+            use = (torch.rand(B, device=frames.device) < prob).view(B, 1, 1, 1, 1)
+            ctx = torch.where(use, ctx, real_ctx)
+        return self.loss(ctx, frames[:, K + rollout], act[:, rollout:rollout + K])
+
     def loss_unrolled(self, frames: Tensor, act: Tensor, unroll: int = 1):
         """DIAMOND-style multi-step training. frames [B, K+unroll, 3, H, W] in [-1,1], act [B, K+unroll-1, 3-hot 9].
         Step i predicts frame K+i from the previous K frames; afterwards that frame is replaced (for the later steps'

@@ -41,6 +41,18 @@ def summarize(curve, steps=(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)):
     return {str(s): float(curve[s - 1]) for s in steps if s <= len(curve)}
 
 
+def grad_mag(x):
+    """Mean absolute horizontal+vertical gradient of frames in [-1,1] (a blur / detail measure)."""
+    gx = (x[..., :, 1:] - x[..., :, :-1]).abs().mean()
+    gy = (x[..., 1:, :] - x[..., :-1, :]).abs().mean()
+    return float((gx + gy) / 2)
+
+
+def first_below(curve, thr):
+    idx = np.nonzero(np.asarray(curve) < thr)[0]
+    return int(idx[0]) + 1 if len(idx) else len(curve) + 1
+
+
 def action_class(a):
     """Name of the action type for per-action analysis; a = (move, strafe, turn)."""
     mv, st, tu = int(a[0]), int(a[1]), int(a[2])
@@ -257,6 +269,9 @@ def main():
                              "mean_psnr_first32": float(r["psnr"][:32].mean()),
                              "mean_psnr_first128": float(r["psnr"][:128].mean()),
                              "mean_psnr_all": float(r["psnr"].mean()), "episodes": a.episodes, "horizon": L}
+    out["rollout_euler3"]["frames_until_psnr_below_25db"] = first_below(r["psnr"], 25.0)
+    out["rollout_euler3"]["frames_until_psnr_below_20db"] = first_below(r["psnr"], 20.0)
+    out["rollout_euler3"]["sharpness_ratio_last32"] = grad_mag(r["frames"][:, -32:]) / grad_mag(long_traj["frames"][:, 4 + L - 32:4 + L])
     # does the dream stay a valid game frame even when it no longer matches the true frame?
     bank = ev.make_frame_bank(world, n=a.bank if not a.quick else 4000)
     gt_long = long_traj["frames"][:, 4:4 + L]

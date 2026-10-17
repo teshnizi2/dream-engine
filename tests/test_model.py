@@ -267,3 +267,32 @@ def test_context_blur_augmentation_smooths_the_context_but_keeps_its_mean_colour
     m0 = tiny(ctx_noise_max=0.0, ctx_blur_prob=0.0)
     same, _ = m0.augment_context(ctx)
     assert torch.equal(same, ctx)
+
+
+# ------------------------------------------------------------------ rollout-context training (scheduled sampling with the model's own frames)
+
+def test_rollout_context_loss_trains_on_frames_the_model_generated_itself():
+    torch.manual_seed(0)
+    m = tiny(ctx_noise_max=0.0)
+    _randomise_zero_inits(m)
+    B, K, L = 4, 4, 2
+    frames = torch.rand(B, K + L + 1, 3, 64, 64) * 2 - 1
+    act = encode_actions(torch.randint(0, 3, (B, K + L, 3)))
+    seen = []
+    real_F = m._F
+
+    def spy(x, cs, ctx, a, s_c):
+        seen.append(ctx.detach().clone())
+        return real_F(x, cs, ctx, a, s_c)
+
+    m._F = spy
+    loss, logs = m.loss_rollout(frames, act, rollout=L, prob=1.0)
+    assert torch.isfinite(loss) and len(seen) == L + 1, "L gradient-free rollout passes, then the training pass"
+    # all samples used generated context: its newest frames are the model's, not the real frames L..L+K-1
+    assert not torch.equal(seen[-1], frames[:, L:L + K])
+    loss.backward()
+    assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in m.parameters())
+    # prob 0 -> the ordinary loss on the real frames L..L+K-1
+    seen.clear()
+    m.loss_rollout(frames, act, rollout=L, prob=0.0)
+    assert torch.equal(seen[-1], frames[:, L:L + K])

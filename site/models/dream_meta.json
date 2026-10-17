@@ -29,12 +29,17 @@
   "sigma_min": 0.002,
   "sigma_max_train": 20.0,
   "ctx_noise_max": 0.5,
-  "ctx_noise_prob": 0.9
+  "ctx_noise_prob": 0.9,
+  "ctx_blur_prob": 0.0,
+  "ctx_blur_max": 1.5
  },
- "checkpoint_step": 3000,
+ "checkpoint_step": 20000,
  "sigma_max": 5.0,
  "sigma_min": 0.002,
  "rho": 7.0,
  "sigma_data": 0.5,
- "sigma_offset_noise": 0.3
+ "sigma_offset_noise": 0.3,
+ "ctx_sigma": 0.05,
+ "sampler_init": "unit",
+ "default_steps": 2
 }

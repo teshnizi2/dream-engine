@@ -19,6 +19,8 @@ const realRGB = new Uint8Array(N);
 const frameHist = [];                              // last K real frames (CHW floats), newest last
 const actHist = [];                                // actions that produced them
 let steps = 3, framesSince = 0, paused = false, ready = false, autoplay = false, tourIdx = 0, tour = [];
+let autowake = qs.get('autowake') === '1';
+const AUTOWAKE_FRAMES = 60;                         // 2 s at the 30 Hz game tick
 const psnrHist = [];
 const wakeMarks = [];                              // indexes into psnrHist where the dream was (re)seeded from the real game
 const tickTimes = [];
@@ -228,6 +230,8 @@ function setAutoplay(on) {
   if (!on) setKeyLights(held);
 }
 $('btn-auto').addEventListener('click', () => setAutoplay(!autoplay));
+$('btn-autowake').addEventListener('click', (e) => { autowake = !autowake; e.currentTarget.setAttribute('aria-pressed', String(autowake)); });
+if (autowake) $('btn-autowake').setAttribute('aria-pressed', 'true');
 document.querySelectorAll('.tp').forEach((b) => b.addEventListener('pointerdown', () => { if (autoplay) setAutoplay(false); }));
 const drawer = $('drawer'), scrim = $('scrim');
 function openDrawer() { drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); scrim.hidden = false; $('btn-about').setAttribute('aria-expanded', 'true'); drawer.focus({ preventScroll: true }); }
@@ -263,6 +267,7 @@ async function pickModel() {
 
 async function boot() {
   body.classList.toggle('capture', CAPTURE);
+  body.classList.toggle('square', CAPTURE && qs.get('square') === '1');
   fitScale();
   startStatic();
   const veilText = $('veil-text');
@@ -313,6 +318,7 @@ async function run() {
   for (;;) {
     if (paused || document.hidden) { await nextFrame(); continue; }
     const t0 = performance.now();
+    if (autowake && framesSince >= AUTOWAKE_FRAMES) wake();
     let a;
     if (autoplay && tour.length) {
       if (tourIdx >= tour.length) { resetReal(); wake(); tourIdx = 0; }
@@ -328,6 +334,7 @@ async function run() {
 
 // ------------------------------------------------------------------ capture mode (scripted, deterministic)
 function installCapture() {
+  if (qs.get('note')) $('capnote').innerHTML = qs.get('note').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
   window.__capture = {
     async tick(spec) {                              // spec: array [move, strafe, turn]
       const a = Array.isArray(spec) ? spec : actionFromKeys(new Set(String(spec).split('+').filter(Boolean)));
