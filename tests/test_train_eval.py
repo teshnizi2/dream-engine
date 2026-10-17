@@ -178,3 +178,23 @@ def test_hold_one_key_rollouts_report_every_control(world):
         assert set(v["dream_psnr_at"]) >= {"1", "4", "8"} and np.isfinite(list(v["freeze_psnr_at"].values())).all()
         # copying the last frame IS the freeze baseline
         assert abs(v["dream_psnr_at"]["8"] - v["freeze_psnr_at"]["8"]) < 1e-3
+
+
+def test_rollout_figures_are_rebuilt_from_the_saved_npz(tmp_path, monkeypatch):
+    """eval.py saves the first rollouts as uint8; `--figs-only` rebuilds the labelled grid and the gif from them."""
+    import eval as E
+    from PIL import Image
+    rng = np.random.default_rng(0)
+    gt = torch.from_numpy(rng.uniform(-1, 1, (3, 20, 3, 64, 64))).float()
+    gen = torch.from_numpy(rng.uniform(-1, 1, (3, 20, 3, 64, 64))).float()
+    u8 = E.to_u8(gt)
+    assert u8.shape == (3, 20, 64, 64, 3) and u8.dtype == np.uint8
+    assert torch.allclose(E.from_u8(u8), gt, atol=1 / 255 + 1e-6)         # 8-bit round trip
+    (tmp_path / "results").mkdir()
+    np.savez_compressed(tmp_path / "results" / "rollouts_t.npz", gt=u8, dream=E.to_u8(gen))
+    monkeypatch.setattr(E, "ROOT", tmp_path)
+    E.rollout_figures("t")
+    grid = Image.open(tmp_path / "media" / "rollout_grid.png")
+    assert 3 * 128 < grid.size[0] < 6 * 128 and grid.size[1] > 3 * 2 * 128   # columns: frames 1, 8, 16 of 20; rows: 3 episodes x (real, dream)
+    gif = Image.open(tmp_path / "media" / "rollout.gif")
+    assert gif.n_frames == 10 and gif.size[1] > 64 * 3                    # 20 frames, every 2nd, labelled strips above and below

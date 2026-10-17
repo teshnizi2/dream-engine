@@ -159,32 +159,63 @@ def rollout_figures(name):
     save_rollout_gif(media / "rollout.gif", gt, gen)
 
 
-def save_rollout_grid(path, gt, dream, steps=(0, 7, 15, 31, 63, 127, 255, 511), episodes=4, scale=3):
+def _tile(x, size):
+    """[3, 64, 64] in [-1, 1] -> PIL image, nearest-neighbour upscaled"""
     from PIL import Image
+    a = ((x + 1) / 2 * 255).round().clamp(0, 255).byte().permute(1, 2, 0).numpy()
+    return Image.fromarray(a).resize((size, size), Image.NEAREST)
+
+
+def save_rollout_grid(path, gt, dream, steps=(0, 7, 15, 31, 63, 127, 255, 511), episodes=4, scale=2):
+    """Real (grey label) above dream (amber label), same actions, at the given frames since wake-up."""
+    from PIL import Image, ImageDraw, ImageFont
     steps = [s for s in steps if s < dream.shape[1]]
-    rows = []
-    for e in range(min(episodes, len(dream))):
-        for src in (gt, dream):
-            row = torch.cat([src[e, s] for s in steps], dim=2)        # [3, 64, 64*len]
-            rows.append(row)
-        rows.append(torch.full_like(rows[-1][:, :4], -0.8))             # spacer
-    img = torch.cat(rows, dim=1)
-    arr = ((img + 1) / 2 * 255).round().clamp(0, 255).byte().permute(1, 2, 0).numpy()
-    Image.fromarray(arr).resize((arr.shape[1] * scale, arr.shape[0] * scale), Image.NEAREST).save(path)
+    n_ep = min(episodes, len(dream))
+    tile, gap, left, top, pad, ep_gap = 64 * scale, 6, 84, 58, 22, 20
+    bg, line, muted, amber = (14, 17, 23), (46, 58, 82), (136, 147, 171), (245, 158, 11)
+    W = left + len(steps) * (tile + gap) - gap + pad
+    H = top + n_ep * (2 * tile + gap + ep_gap) - ep_gap + pad
+    img = Image.new("RGB", (W, H), bg)
+    d = ImageDraw.Draw(img)
+    f_small, f_lab = ImageFont.load_default(size=15), ImageFont.load_default(size=17)
+    d.text((left, 20), "frames since wake-up (4 real frames, then pure imagination from the same keypresses)", font=f_small, fill=muted, anchor="ls")
+    for j, st in enumerate(steps):
+        d.text((left + j * (tile + gap) + tile // 2, top - 12), str(st + 1), font=f_lab, fill=(232, 236, 245), anchor="ms")
+    for e in range(n_ep):
+        y0 = top + e * (2 * tile + gap + ep_gap)
+        for r, (src, lab, col) in enumerate(((gt, "REAL", muted), (dream, "DREAM", amber))):
+            y = y0 + r * (tile + gap)
+            d.text((left - 14, y + tile // 2), lab, font=f_lab, fill=col, anchor="rm")
+            for j, st in enumerate(steps):
+                img.paste(_tile(src[e, st], tile), (left + j * (tile + gap), y))
+        if e < n_ep - 1:
+            yl = y0 + 2 * tile + gap + ep_gap // 2
+            d.line([(left, yl), (W - pad, yl)], fill=line, width=1)
+    img.save(path)
 
 
 def save_rollout_gif(path, gt, dream, episodes=3, frames=128, scale=3, every=2):
+    """REAL | DREAM side by side for a few episodes, labelled, with the frame counter."""
     import imageio.v2 as imageio
+    from PIL import Image, ImageDraw, ImageFont
     n = min(frames, dream.shape[1])
+    n_ep = min(episodes, len(dream))
+    tile, gap, head, foot, colgap = 64 * scale, 4, 30, 30, 18
+    bg, muted, amber = (14, 17, 23), (136, 147, 171), (245, 158, 11)
+    W = n_ep * (2 * tile + gap) + (n_ep - 1) * colgap
+    f = ImageFont.load_default(size=16)
     ims = []
     for t in range(0, n, every):
-        cols = []
-        for e in range(min(episodes, len(dream))):
-            cols.append(torch.cat([gt[e, t], torch.full((3, 64, 3), -0.8), dream[e, t]], dim=2))
-        img = torch.cat(cols, dim=1)
-        arr = ((img + 1) / 2 * 255).round().clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        arr = np.kron(arr, np.ones((scale, scale, 1), dtype=np.uint8))
-        ims.append(arr)
+        img = Image.new("RGB", (W, head + tile + foot), bg)
+        d = ImageDraw.Draw(img)
+        for e in range(n_ep):
+            x = e * (2 * tile + gap + colgap)
+            d.text((x + 2, head - 8), "REAL", font=f, fill=muted, anchor="ls")
+            d.text((x + tile + gap + 2, head - 8), "DREAM", font=f, fill=amber, anchor="ls")
+            img.paste(_tile(gt[e, t], tile), (x, head))
+            img.paste(_tile(dream[e, t], tile), (x + tile + gap, head))
+        d.text((2, head + tile + foot - 8), f"frame {t + 1} since wake-up", font=f, fill=muted, anchor="ls")
+        ims.append(np.asarray(img))
     imageio.mimsave(path, ims, duration=0.07 * every, loop=0)
 
 
