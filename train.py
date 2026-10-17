@@ -195,7 +195,7 @@ def main(argv=None):
         model.train()
         def compute_loss():
             if a.rollout_ctx > 0:
-                return model.loss_rollout(frames[:, :5 + a.rollout_ctx - 0], act, rollout=a.rollout_ctx, prob=a.rollout_prob)
+                return model.loss_rollout(frames[:, :5 + a.rollout_ctx], act, rollout=a.rollout_ctx, prob=a.rollout_prob)
             if a.unroll > 1:
                 return loss_unrolled_fn(frames, act, a.unroll)
             return loss_fn(frames[:, :4], frames[:, 4], act[:, :4])
