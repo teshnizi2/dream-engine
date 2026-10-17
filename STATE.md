@@ -1,6 +1,6 @@
 # dream-engine: handoff note (STATE)
 
-Last updated: 2026-10-17 16:30 (main ALICE run still training; see "Next steps").
+Last updated: 2026-10-17 17:45 (main ALICE run still training, ETA 18:33; see "Next steps").
 
 ## Goal
 A small action-conditioned diffusion world model (DIAMOND-style EDM U-Net) trained on a first-person raycaster maze.
@@ -64,12 +64,18 @@ Shared rules: `../visual-series-RULES.md` (ALICE is approved for this project's 
   the raw drift instead.
 
 ## Next steps
-1. When `full1` ends (Slurm 5246233): `rsync alice2:dream-engine/runs/full1/final_ema.pt runs/full1_final_ema.pt`; submit
-   `alice/eval.slurm` (RUN=full1) and optionally a blur fine-tune (`INIT_FROM=runs/full1/final_ema.pt BLUR_PROB=0.5 BLUR_MAX=2.0`).
-2. Choose defaults from `results/probe_*.json`; `python export.py --ckpt ... --out site/models --name dream --fp16 --verify ...`;
-   `python tools/make_eval_summary.py`; `node tools/verify_onnx_browser.mjs`; `node tools/capture_eval.mjs --windows ...` (browser vs
-   Python on identical windows); `node tools/browser_fps.mjs --out results/browser_fps.json` on the quietest GPU moment.
-3. `node tools/capture_video.mjs --out media/dream-1080x1350.mp4 --wake-every 48 ...` (+ `--square 1` for 1080x1080), hero still,
-   `media/drift.png` from the ALICE eval.
-4. `python tools/training_summary.py ...`, RUNS.md rows (waves 2 and 3, main run, final eval), `python tools/fill_readme.py ...`,
+1. `full1` (Slurm 5246233) ends ~18:33 and runs `eval.py` inline in the same allocation (8 episodes x 256 frames, primary config 2 steps /
+   `unit` / ctx 0.05 = the new `eval.py` defaults, no figures). The chained no-op job 5246234 was cancelled while pending (it would only
+   have repeated that eval). The ALICE queue is shared with the other builder (12-GPU per-user cap, ~100 `rf-render` tasks queued ahead),
+   so any extra ALICE job waits hours: do the rest locally. `5246644` (eval_many of the old runs) is still pending; cancel it if it has
+   not started when the README is built (the README tables then use the existing `results/ablation/eval_*.json`).
+2. `rsync alice2:dream-engine/runs/full1/final_ema.pt runs/full1_final_ema.pt` and `alice2:dream-engine/results/eval_full1.json results/`;
+   then the local full eval with figures: `python eval.py --ckpt runs/full1_final_ema.pt --name full1_local --device mps --long 512 --episodes 8`
+   (<= 20 min; falls back to cpu). README numbers come from this file, the ALICE one is the cross-check.
+3. `python export.py --ckpt ... --out site/models --name dream --fp16 --verify --ctx-sigma 0.05 --init unit --default-steps 2`;
+   `python tools/make_eval_summary.py`; `node tools/verify_onnx_browser.mjs`; `python tools/crosscheck.py ...`;
+   `node tools/browser_fps.mjs` (quiet GPU window) + `--backend wasm --dtype fp32`; `node tools/browser_profile.mjs`.
+4. Media: `node tools/capture_video.mjs --out media/dream-1080x1350.mp4 --wake-every 32 --wake-until <tick> --notes "0=...|<tick>=..."`
+   (+ `--square 1`), hero still, `media/drift.png`, rollout grid/gif (written by the local eval).
+5. `python tools/training_summary.py ...`, RUNS.md rows (main run, inline eval, cancelled chain job), `python tools/fill_readme.py ...`,
    POST.md, full test run, `git add -f site/models/dream_*.onnx`, commit.

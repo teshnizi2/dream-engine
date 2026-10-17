@@ -344,8 +344,11 @@ async function run() {
 
 // ------------------------------------------------------------------ capture mode (scripted, deterministic)
 function installCapture() {
-  if (qs.get('note')) $('capnote').innerHTML = qs.get('note').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  // caption under the poster: text is escaped first, only **bold** is turned into markup
+  const setNote = (s) => { $('capnote').innerHTML = String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); };
+  if (qs.get('note')) setNote(qs.get('note'));
   window.__capture = {
+    setNote,
     async tick(spec) {                              // spec: array [move, strafe, turn]
       const a = Array.isArray(spec) ? spec : actionFromKeys(new Set(String(spec).split('+').filter(Boolean)));
       setKeyLights(keysFromAction(a));

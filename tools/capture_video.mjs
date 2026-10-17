@@ -1,7 +1,8 @@
 // Deterministic capture of the demo page: replays the scripted tour on both panels, one game tick per video frame,
 // screenshots the 1080x1350 poster layout and encodes an H.264 mp4 with ffmpeg.
 //   node tools/capture_video.mjs --out media/dream-1080x1350.mp4 [--fps 24] [--max 480] [--steps 3] [--seed 1234]
-//        [--ms 45 --fps-label 22] [--wake-every 0] [--keep-frames] [--still media/hero.png --still-at 300]
+//        [--ms 45 --fps-label 22] [--wake-every 0 [--wake-until TICK]] [--keep-frames] [--still media/hero.png --still-at 300]
+//        [--notes "0=caption one|336=caption two"]   (caption changes at the given ticks; **bold** is allowed)
 import path from 'node:path';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -39,10 +40,12 @@ try {
   const info = await page.evaluate(() => window.__capture.info());
   console.log('model/backend:', JSON.stringify(info));
   const stills = (args['still-at'] || '').split(',').filter(Boolean).map(Number);
-  const wakeEvery = +(args['wake-every'] || 0);
+  const wakeEvery = +(args['wake-every'] || 0), wakeUntil = +(args['wake-until'] || Infinity);
+  const notes = new Map((args.notes || '').split('|').filter(Boolean).map((s) => { const i = s.indexOf('='); return [+s.slice(0, i), s.slice(i + 1)]; }));
   const psnrs = [];
   for (let i = 0; i < N; i++) {
-    if (wakeEvery && i > 0 && i % wakeEvery === 0) await page.evaluate(() => window.__capture.wake());
+    if (notes.has(i)) await page.evaluate((t) => window.__capture.setNote(t), notes.get(i));
+    if (wakeEvery && i > 0 && i % wakeEvery === 0 && i < wakeUntil) await page.evaluate(() => window.__capture.wake());
     const r = await page.evaluate((a) => window.__capture.tick(a), tour[i]);
     psnrs.push(r.psnr);
     const file = path.join(framesDir, `frame_${String(i).padStart(5, '0')}.png`);
