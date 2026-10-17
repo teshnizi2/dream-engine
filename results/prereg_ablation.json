@@ -1,0 +1,140 @@
+{
+ "baseline": "w2_B",
+ "runs": {
+  "w2_B": {
+   "name": "w2_B",
+   "K": 4,
+   "game": "v2",
+   "steps": 20000,
+   "horizon_median": 14.0,
+   "horizon_p25": 5.75,
+   "horizon_p75": 25.5,
+   "horizon_median_ci95": [
+    10.5,
+    18.0
+   ],
+   "horizon_25db_median": 6.0,
+   "collapse": 0.667455456570156,
+   "collapse_ci95": [
+    0.6104529162026725,
+    0.7216383630289532
+   ],
+   "collapse_window1": 0.6195364699331849,
+   "dream_stuck_share": 0.7277978841870824,
+   "real_stuck_share": 0.06876391982182628,
+   "dream_flat_share": 0.8423232182628062,
+   "real_flat_share": 0.24899081291759464,
+   "spin_return_psnr": 15.110369682312012,
+   "one_step_psnr": 31.42943000793457,
+   "copy_last_psnr": 24.201534271240234,
+   "mean_psnr_first32": 21.19002737896517,
+   "unrelated_frame_psnr": 12.45831298828125,
+   "episodes": 64
+  },
+  "v2k8": {
+   "name": "v2k8",
+   "K": 8,
+   "game": "v2",
+   "steps": 20000,
+   "horizon_median": 13.5,
+   "horizon_p25": 5.0,
+   "horizon_p75": 23.5,
+   "horizon_median_ci95": [
+    10.0,
+    15.0
+   ],
+   "horizon_25db_median": 5.0,
+   "collapse": 0.6695086302895323,
+   "collapse_ci95": [
+    0.611388154231626,
+    0.7280075515033408
+   ],
+   "collapse_window1": 0.6161261135857461,
+   "dream_stuck_share": 0.7242135300668151,
+   "real_stuck_share": 0.06876391982182628,
+   "dream_flat_share": 0.8333449331848553,
+   "real_flat_share": 0.24899081291759464,
+   "spin_return_psnr": 15.268854141235352,
+   "one_step_psnr": 31.404800415039062,
+   "copy_last_psnr": 24.201534271240234,
+   "mean_psnr_first32": 20.997358354739845,
+   "unrelated_frame_psnr": 12.45831298828125,
+   "episodes": 64
+  },
+  "v3k4": {
+   "name": "v3k4",
+   "K": 4,
+   "game": "v3",
+   "steps": 20000,
+   "horizon_median": 15.5,
+   "horizon_p25": 7.0,
+   "horizon_p75": 27.0,
+   "horizon_median_ci95": [
+    11.0,
+    21.0
+   ],
+   "horizon_25db_median": 6.0,
+   "collapse": 0.5421422605790647,
+   "collapse_ci95": [
+    0.4774142190979956,
+    0.6100753410356348
+   ],
+   "collapse_window1": 0.5542177060133631,
+   "dream_stuck_share": 0.5929844097995546,
+   "real_stuck_share": 0.06876391982182628,
+   "dream_flat_share": 0.7580734966592427,
+   "real_flat_share": 0.24899081291759464,
+   "spin_return_psnr": 15.24057388305664,
+   "one_step_psnr": 31.83472442626953,
+   "copy_last_psnr": 24.710464477539062,
+   "mean_psnr_first32": 21.689710405655205,
+   "unrelated_frame_psnr": 12.845266342163086,
+   "episodes": 64
+  },
+  "v3k8": {
+   "name": "v3k8",
+   "K": 8,
+   "game": "v3",
+   "steps": 20000,
+   "horizon_median": 13.0,
+   "horizon_p25": 7.0,
+   "horizon_p75": 28.25,
+   "horizon_median_ci95": [
+    11.0,
+    20.0
+   ],
+   "horizon_25db_median": 6.0,
+   "collapse": 0.4978076280623608,
+   "collapse_ci95": [
+    0.42747337834075727,
+    0.5664010300668151
+   ],
+   "collapse_window1": 0.5108922605790646,
+   "dream_stuck_share": 0.5511205456570156,
+   "real_stuck_share": 0.06876391982182628,
+   "dream_flat_share": 0.7064657572383074,
+   "real_flat_share": 0.24899081291759464,
+   "spin_return_psnr": 14.781176567077637,
+   "one_step_psnr": 31.778478622436523,
+   "copy_last_psnr": 24.710464477539062,
+   "mean_psnr_first32": 21.467559572774917,
+   "unrelated_frame_psnr": 12.845266342163086,
+   "episodes": 64
+  }
+ },
+ "selection": {
+  "winner": "v3k4",
+  "eligible": [
+   "v3k4"
+  ],
+  "tied": [
+   "v3k4"
+  ],
+  "reason": "1 of 3 variants have a median horizon of at least the baseline's (14.0); collapse rates within 0.02 of the lowest (0.542): ['v3k4']; chosen: v3k4"
+ },
+ "pairing_check_real_flat_flags_agree": {
+  "v2k8": 1.0,
+  "v3k4": 1.0,
+  "v3k8": 1.0
+ }
+}
