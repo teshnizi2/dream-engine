@@ -38,7 +38,24 @@ MAP = [
 ]
 
 
-def build():
+# Game v3 (docs/PREREG-v3.md): self-localising walls. A tint on every wall that depends on the world position of the hit
+# point, plus four distinct face shades. Channel c of the tint is  amplitude * wave(ax_c * x + ay_c * y + phase_c)  grey
+# levels, `wave` a smooth periodic function in [-1, 1] (period 1 in its argument) built from + - * floor abs only, so the
+# JavaScript twin reproduces it bit for bit. The (ax, ay, phase) triples were found by `tools/design_signature.py` (seeded
+# random search + hill climb): they maximise the smallest colour difference between any two visible faces of the same wall
+# type, with periods of at least 5 cells (low frequency). The landmark pillar keeps its exact amber look (tint_gain 0): its four
+# faces are told apart by the face shades alone.
+TINT_AMPLITUDE = 12.0
+TINT_WAVES = [[-0.1377, -0.1216, 0.2249], [-0.2, -0.1857, 0.131], [-0.1073, 0.1133, 0.9753]]
+FACE_SHADE = [1.0, 0.9, 0.78, 0.66]      # the face of the wall cell that the ray hits: W (ray travels east), E, N (ray travels south), S
+TINT_GAIN = {"4": 0.0}                    # per wall id, default 1.0
+
+
+def build(version=2):
+    """The game spec. version 2 is the frozen v2 game (game/spec_v2.json, byte-identical to the v2-final tag); version 3 adds
+    the signature layer (the "tint" section, a "tint_gain" per wall and "game_version": 3) and changes nothing else."""
+    if version not in (2, 3):
+        raise ValueError(f"unknown game version {version}")
     turn_deg = 5.0
     a = math.radians(turn_deg)
     spec = {
@@ -87,12 +104,23 @@ def build():
             "turn": ["none", "left", "right"],
         },
     }
+    if version == 3:
+        spec["game_version"] = 3
+        for k, w in spec["walls"].items():
+            w["tint_gain"] = TINT_GAIN.get(k, 1.0)
+        spec["tint"] = {"amplitude": TINT_AMPLITUDE, "waves": TINT_WAVES, "face_shade": FACE_SHADE}
     return spec
 
 
+SHIPPED = 2          # the game the site and the default data loader use; change to 3 only after docs/PREREG-v3.md's adoption rule is met
+
+
 if __name__ == "__main__":
-    spec = build()
-    for r in spec["map"]:
-        assert len(r) == 16, r
-    (HERE / "spec.json").write_text(json.dumps(spec, indent=1) + "\n")
-    print("wrote", HERE / "spec.json")
+    for v, name in ((2, "spec_v2.json"), (3, "spec_v3.json")):
+        spec = build(v)
+        for r in spec["map"]:
+            assert len(r) == 16, r
+        (HERE / name).write_text(json.dumps(spec, indent=1) + "\n")
+        print("wrote", HERE / name)
+    (HERE / "spec.json").write_text((HERE / f"spec_v{SHIPPED}.json").read_text())
+    print("wrote", HERE / "spec.json", f"(= v{SHIPPED})")

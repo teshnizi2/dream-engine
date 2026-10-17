@@ -1,0 +1,268 @@
+{
+ "version": 1,
+ "size": 16,
+ "width": 64,
+ "height": 64,
+ "plane": 0.8,
+ "move_speed": 0.12,
+ "strafe_speed": 0.1,
+ "turn_deg": 5.0,
+ "turn_cos": 0.9961946980917455,
+ "turn_sin": 0.08715574274765817,
+ "radius": 0.22,
+ "fog_k": 0.16,
+ "fog_color": [
+  14,
+  17,
+  23
+ ],
+ "side_shade": 0.74,
+ "ceiling": {
+  "horizon": [
+   30,
+   38,
+   58
+  ],
+  "top": [
+   10,
+   13,
+   22
+  ]
+ },
+ "floor": {
+  "horizon": [
+   52,
+   44,
+   40
+  ],
+  "bottom": [
+   26,
+   22,
+   22
+  ]
+ },
+ "wall_chars": {
+  "S": 1,
+  "R": 2,
+  "B": 3,
+  "A": 4,
+  "W": 5,
+  "G": 6,
+  "P": 7,
+  "Y": 8
+ },
+ "mip": [
+  2.0,
+  7.0
+ ],
+ "walls": {
+  "1": {
+   "name": "stone",
+   "rgb": [
+    112,
+    124,
+    148
+   ],
+   "rgb2": [
+    86,
+    96,
+    120
+   ],
+   "emit": 0.0,
+   "pattern": "blocks",
+   "p": [
+    2,
+    2,
+    0.06,
+    0.05,
+    0.11
+   ]
+  },
+  "2": {
+   "name": "red_brick",
+   "rgb": [
+    168,
+    56,
+    50
+   ],
+   "rgb2": [
+    112,
+    40,
+    40
+   ],
+   "emit": 0.0,
+   "pattern": "blocks",
+   "p": [
+    4,
+    2,
+    0.1,
+    0.06,
+    0.15
+   ]
+  },
+  "3": {
+   "name": "blue_door",
+   "rgb": [
+    48,
+    104,
+    206
+   ],
+   "rgb2": [
+    112,
+    160,
+    236
+   ],
+   "emit": 0.0,
+   "pattern": "frame",
+   "p": [
+    0.1,
+    0.36
+   ]
+  },
+  "4": {
+   "name": "amber_pillar",
+   "rgb": [
+    245,
+    158,
+    11
+   ],
+   "rgb2": [
+    255,
+    205,
+    100
+   ],
+   "emit": 0.75,
+   "pattern": "pillar",
+   "p": [
+    3,
+    0.12,
+    0.12
+   ]
+  },
+  "5": {
+   "name": "window_stripes",
+   "rgb": [
+    44,
+    54,
+    80
+   ],
+   "rgb2": [
+    168,
+    204,
+    240
+   ],
+   "emit": 0.55,
+   "pattern": "windows",
+   "p": [
+    3,
+    0.16,
+    0.84,
+    0.18,
+    0.82,
+    0.44
+   ]
+  },
+  "6": {
+   "name": "moss",
+   "rgb": [
+    64,
+    138,
+    92
+   ],
+   "rgb2": [
+    46,
+    106,
+    72
+   ],
+   "emit": 0.0,
+   "pattern": "moss",
+   "p": [
+    5,
+    0.4
+   ]
+  },
+  "7": {
+   "name": "purple",
+   "rgb": [
+    128,
+    92,
+    176
+   ],
+   "rgb2": [
+    92,
+    66,
+    132
+   ],
+   "emit": 0.0,
+   "pattern": "dado",
+   "p": [
+    0.62,
+    0.04,
+    0.38
+   ]
+  },
+  "8": {
+   "name": "ochre",
+   "rgb": [
+    200,
+    154,
+    86
+   ],
+   "rgb2": [
+    158,
+    116,
+    64
+   ],
+   "emit": 0.0,
+   "pattern": "blocks",
+   "p": [
+    2,
+    2,
+    0.05,
+    0.04,
+    0.09
+   ]
+  }
+ },
+ "map": [
+  "GGGGWWWWWWWWWWWS",
+  "G..............Y",
+  "G...GS.SSSSSSS.Y",
+  "G...GS.SSSSSSS.Y",
+  "SG.GSS.SSSSSSS.Y",
+  "SG.GB......SRR.R",
+  "SG.GB......R...R",
+  "SG.....A...R...R",
+  "SG.GB..........R",
+  "SG.GB......R...R",
+  "SG.GPSSSS.SYR.RS",
+  "P....PSSS.Y....Y",
+  "P..............Y",
+  "P....PSSSSY....Y",
+  "P....PSSSSY....Y",
+  "SPPPPSSSSSSYYYYS"
+ ],
+ "start": {
+  "x": 2.5,
+  "y": 7.5,
+  "dx": 1.0,
+  "dy": 0.0
+ },
+ "actions": {
+  "move": [
+   "none",
+   "forward",
+   "back"
+  ],
+  "strafe": [
+   "none",
+   "left",
+   "right"
+  ],
+  "turn": [
+   "none",
+   "left",
+   "right"
+  ]
+ }
+}

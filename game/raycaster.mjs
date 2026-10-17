@@ -8,6 +8,16 @@
 
 const frac = (a) => a - Math.floor(a);
 
+// Game v3 position tint: a smooth periodic wave in [-1, 1] (period 1) from + - * floor abs only (a triangle wave through the cubic
+// u (3 - u^2) / 2), same expression order as _wave in raycaster.py.
+function wave(t) {
+  const u = 4.0 * Math.abs(frac(t) - 0.5) - 1.0;
+  return u * (1.5 - 0.5 * u * u);
+}
+
+// The face of the wall cell a ray hits (same numbering as FACE_* in raycaster.py).
+export const FACE_W = 0, FACE_E = 1, FACE_N = 2, FACE_S = 3;
+
 // pattern outputs (written into these to avoid allocations in the pixel loop)
 let PK = 0, PM = 1, PEM = 0;
 
@@ -92,11 +102,19 @@ export class World {
     this.camx = new Float64Array(this.W);
     for (let i = 0; i < this.W; i++) this.camx[i] = (2.0 * (i + 0.5)) / this.W - 1.0;
     this.bg = this._backgroundRows();
+    // game v3: position tint + face shades (absent in the v2 spec: then the v2 rendering path is used unchanged)
+    this.tint = spec.tint || null;
+    this.tintGain = new Float64Array(nid).fill(1.0);
+    for (const [k, w] of Object.entries(spec.walls)) if ('tint_gain' in w) this.tintGain[+k] = w.tint_gain;
     // per-column scratch
     this._perp = new Float64Array(this.W);
     this._side = new Int8Array(this.W);
     this._wid = new Int8Array(this.W);
     this._u = new Float64Array(this.W);
+    this._hx = new Float64Array(this.W);
+    this._hy = new Float64Array(this.W);
+    this._face = new Int8Array(this.W);
+    this._off = new Float64Array(3);
   }
 
   _backgroundRows() {
@@ -156,6 +174,18 @@ export class World {
     wx = wx - Math.floor(wx);
     const flip = (side === 0 && rdx > 0) || (side === 1 && rdy < 0);
     this._perp[i] = perp; this._side[i] = side; this._wid[i] = wid; this._u[i] = flip ? 1.0 - wx : wx;
+    if (this.tint) {
+      this._hx[i] = x + perp * rdx; this._hy[i] = y + perp * rdy;
+      this._face[i] = side === 0 ? (rdx > 0 ? FACE_W : FACE_E) : (rdy > 0 ? FACE_N : FACE_S);
+    }
+  }
+
+  // Colour offsets (grey levels) painted on the walls at world position (hx, hy): channel c is
+  // amplitude * wave(ax_c * hx + ay_c * hy + phase_c). Writes into `out` (length 3) and returns it.
+  tintOffsets(hx, hy, out = new Float64Array(3)) {
+    const t = this.tint;
+    for (let c = 0; c < 3; c++) { const w = t.waves[c]; out[c] = t.amplitude * wave(w[0] * hx + w[1] * hy + w[2]); }
+    return out;
   }
 
   distanceAhead(st) {
@@ -173,7 +203,14 @@ export class World {
       const top = half - lineh * 0.5;
       const bot = half + lineh * 0.5;
       const wid = this._wid[i], u = this._u[i];
-      const shade = this._side[i] === 1 ? this.sideShade : 1.0;
+      let shade = this._side[i] === 1 ? this.sideShade : 1.0;
+      const off = this._off;
+      if (this.tint) {
+        shade = this.tint.face_shade[this._face[i]];
+        this.tintOffsets(this._hx[i], this._hy[i], off);
+        const g = this.tintGain[wid];
+        off[0] = off[0] * g; off[1] = off[1] * g; off[2] = off[2] * g;
+      }
       const t = perp * this.fogK;
       const fw = 1.0 / (1.0 + t * t);
       const mt = (this.mip1 - perp) / (this.mip1 - this.mip0);
@@ -190,7 +227,8 @@ export class World {
           const e = emit * PEM;
           const f2 = fw + (1.0 - fw) * e;
           for (let c = 0; c < 3; c++) {
-            const base = rgb1[c] + (rgb2[c] - rgb1[c]) * PK;
+            let base = rgb1[c] + (rgb2[c] - rgb1[c]) * PK;
+            if (this.tint) base = base + off[c];
             let col = base * PM;
             col = col * shade;
             col = fog[c] + (col - fog[c]) * f2;

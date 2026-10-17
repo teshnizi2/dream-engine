@@ -36,9 +36,11 @@ def to_lists(st):
     return {k: np.asarray(v).tolist() for k, v in st._asdict().items()}
 
 
-def main():
+def make(spec_path, stem):
+    """Fixture for one game: tests/fixtures/<stem>.json + <stem>_frames.bin (the JS test replays the same actions on the same spec)."""
     OUT.mkdir(parents=True, exist_ok=True)
-    w = rc.World()
+    spec = rc.load_spec(spec_path)
+    w = rc.World(spec)
     rng = np.random.default_rng(1234)
     free = w.free_cells()
     N, T = 8, 100
@@ -72,7 +74,6 @@ def main():
                   np.array([1.0, 0.0, 0.0, -1.0]), np.array([0.0, -1.0, 1.0, 0.0]))
     edge_frames = w.render(ex)
 
-    spec = rc.load_spec()
     meta = {
         "n_traj": N, "T": T, "n_pose": M,
         "actions": acts.tolist(),
@@ -83,10 +84,15 @@ def main():
         "frame_shape": [spec["height"], spec["width"], 3],
         "sigmas": {str(n): build_sigmas(n, 2e-3, 5.0, 7.0).double().tolist() for n in (1, 2, 3)},
     }
-    (OUT / "parity.json").write_text(json.dumps(meta))
+    (OUT / f"{stem}.json").write_text(json.dumps(meta))
     blob = np.concatenate([traj_frames.reshape(-1, 64, 64, 3), pose_frames, edge_frames]).astype(np.uint8)
-    (OUT / "parity_frames.bin").write_bytes(blob.tobytes())
-    print(f"wrote {OUT} frames={blob.shape[0]} ({blob.nbytes / 1e6:.1f} MB)")
+    (OUT / f"{stem}_frames.bin").write_bytes(blob.tobytes())
+    print(f"wrote {OUT / stem} frames={blob.shape[0]} ({blob.nbytes / 1e6:.1f} MB)")
+
+
+def main():
+    make(ROOT / "game" / "spec_v2.json", "parity")          # the v2 game (fixture names kept from before v3)
+    make(ROOT / "game" / "spec_v3.json", "parity_v3")       # the v3 game
 
 
 if __name__ == "__main__":

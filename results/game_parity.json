@@ -1,5 +1,6 @@
 {
  "script": "tests/parity.test.mjs + tests/make_parity_fixture.py",
+ "game": "game/spec_v2.json",
  "fixture_seed": 1234,
  "trajectories": {
   "frames": 808,

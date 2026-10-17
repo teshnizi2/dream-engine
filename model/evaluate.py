@@ -1,6 +1,6 @@
 """Evaluation helpers: fixed validation windows, 1-step prediction PSNR/SSIM and autoregressive-rollout drift
 curves against the true game. `denoise_fn(x, sigma, ctx, act, s_c)` is `Denoiser.denoise` (or any stand-in)."""
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import torch
@@ -17,15 +17,26 @@ def _to_unit(frames_u8: np.ndarray) -> torch.Tensor:
     return t.movedim(-1, -3).contiguous()
 
 
-def val_windows(world, n: int = 256, seed: int = 999) -> Dict[str, torch.Tensor]:
-    """n fixed independent 5-frame windows (4 context frames + target) from the exploration policy."""
-    b = TrajectorySource(world, n, 5, seed=seed).next_batch()
+def val_windows(world, n: int = 256, seed: int = 999, K: int = 4) -> Dict[str, torch.Tensor]:
+    """n fixed independent (K + 1)-frame windows (K context frames + target) from the exploration policy. The same seed
+    gives the same games for every K (a longer window just extends the shorter one)."""
+    b = TrajectorySource(world, n, K + 1, seed=seed).next_batch()
     return {"frames": _to_unit(b["frames"]), "actions": torch.from_numpy(b["actions"])}
 
 
 def eval_trajectories_t(world, n: int, length: int, seed: int = 123) -> Dict[str, torch.Tensor]:
     b = TrajectorySource(world, n, length, seed=seed, warmup_max=0).next_batch()
     return {"frames": _to_unit(b["frames"]), "actions": torch.from_numpy(b["actions"]), "poses": torch.from_numpy(b["poses"])}
+
+
+def wake_slice(traj: Dict[str, torch.Tensor], wake: int, K: int) -> Dict[str, torch.Tensor]:
+    """The part of a trajectory a K-context model needs when it wakes up at real frame `wake`: the K real frames before
+    it, then everything after. Models with different K are thus scored on the same real frames (wake, wake+1, ...)."""
+    assert wake >= K, "not enough real frames before the wake-up frame"
+    out = {"frames": traj["frames"][:, wake - K:], "actions": traj["actions"][:, wake - K:]}
+    if "poses" in traj:
+        out["poses"] = traj["poses"][:, wake - K:]
+    return out
 
 
 def _gen(seed: int, device) -> torch.Generator:
@@ -37,22 +48,27 @@ def _gen(seed: int, device) -> torch.Generator:
 @torch.no_grad()
 def one_step_metrics(denoise_fn: Callable, windows: Dict[str, torch.Tensor], steps: int = 3, order: int = 1,
                      ctx_sigma: float = 0.1, init: str = "edm", seed: int = 0, batch: int = 64,
-                     sigma_max: float = 5.0, return_pred: bool = False):
-    """Predict frame 5 from frames 1-4 + actions for every window; PSNR/SSIM vs the true next frame (8-bit)."""
+                     sigma_max: float = 5.0, return_pred: bool = False, K: Optional[int] = None):
+    """Predict the last frame of every window from the K frames before it + the K actions ending at it; PSNR/SSIM vs the
+    true next frame (8-bit). K defaults to the window length - 1 (4 for the 5-frame windows of v2); a K smaller than that
+    uses the last K context frames, so models with different K are scored on the same target frames."""
     fr, ac = windows["frames"], windows["actions"]
+    T = fr.shape[1]
+    K = T - 1 if K is None else K
+    assert 1 <= K <= T - 1
     dev = fr.device
     sig = build_sigmas(steps, 2e-3, sigma_max, 7.0)
     ps, ss, preds = [], [], []
     for i in range(0, len(fr), batch):
-        ctx, tgt, a = fr[i:i + batch], fr[i:i + batch, 4], ac[i:i + batch]
+        ctx, tgt, a = fr[i:i + batch, T - 1 - K:T - 1], fr[i:i + batch, T - 1], ac[i:i + batch, T - 1 - K:T - 1]
         dev = _device_of(denoise_fn, ctx)
-        ctx, tgt = ctx[:, :4].to(dev), tgt.to(dev)
+        ctx, tgt = ctx.to(dev), tgt.to(dev)
         gen = None
         c = ctx
         if ctx_sigma > 0:
             c = c + torch.randn(c.shape, device=dev) * ctx_sigma
         s_c = torch.full((len(ctx),), float(ctx_sigma), device=dev)
-        pred = sample_next(denoise_fn, c, encode_actions(a[:, :4]).to(dev), s_c, sig.to(dev), order=order,
+        pred = sample_next(denoise_fn, c, encode_actions(a).to(dev), s_c, sig.to(dev), order=order,
                            quantize=True, generator=gen, init=init)
         p01, t01 = (pred + 1) / 2, (tgt + 1) / 2
         ps.append(metrics.psnr(p01, t01).clamp(max=100).cpu())

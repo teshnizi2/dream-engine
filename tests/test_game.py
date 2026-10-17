@@ -246,3 +246,21 @@ def test_random_walks_never_leave_open_cells(world):
 def test_ray_distance_ahead_reports_wall_distance(world):
     d = world.distance_ahead(S(10.2, 7.5, 0.0))
     assert d[0] == pytest.approx(0.8, abs=1e-9)
+
+
+# ---------------------------------------------------------------- the frozen v2 game (the fallback must stay reproducible)
+
+V2_SPEC_SHA256 = "00830cfbd42a7f0b4a62343fb5768c70fbbd7c2e47fb2cd25a87f488a0de4022"     # game/spec.json at the v2-final tag
+
+
+def test_frozen_v2_spec_is_byte_identical_to_the_one_tagged_v2_final():
+    import hashlib
+    import pathlib
+    sha = hashlib.sha256((pathlib.Path(rc.__file__).parent / "spec_v2.json").read_bytes()).hexdigest()
+    assert sha == V2_SPEC_SHA256
+
+
+def test_make_spec_still_regenerates_the_frozen_v2_spec_exactly():
+    import json
+    from game import make_spec
+    assert json.loads(json.dumps(make_spec.build(version=2))) == rc.load_spec(rc.SPEC_V2)

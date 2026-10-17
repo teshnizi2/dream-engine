@@ -21,14 +21,30 @@ import numpy as np
 HERE = pathlib.Path(__file__).parent
 
 State = namedtuple("State", ["x", "y", "dx", "dy"])   # each: float64 array of shape [B]
+# what a ray hit: perp distance, side (0 = a vertical wall line was crossed, 1 = a horizontal one), wall id, position along the face
+# u in [0, 1), which face of the wall cell (FACE_*), and the world position of the hit point
+Hits = namedtuple("Hits", ["perp", "side", "wid", "u", "face", "hx", "hy"])
+
+# The face of the wall cell that a ray hits. W: the ray travels east and enters the cell from its west side; E: it travels west;
+# N: it travels south (y grows south) and enters from the north; S: it travels north.
+FACE_W, FACE_E, FACE_N, FACE_S = 0, 1, 2, 3
 
 MOVE_NONE, MOVE_FWD, MOVE_BACK = 0, 1, 2
 STRAFE_NONE, STRAFE_LEFT, STRAFE_RIGHT = 0, 1, 2
 TURN_NONE, TURN_LEFT, TURN_RIGHT = 0, 1, 2
 
 
+SPEC_V2 = HERE / "spec_v2.json"          # the frozen v2 game (what every checkpoint trained before v3 saw)
+
+
 def load_spec(path=None):
-    return json.loads(pathlib.Path(path or HERE / "spec.json").read_text())
+    """The game spec at `path` (relative paths are taken from the repository root), default: the shipped spec.json."""
+    if path is None:
+        path = HERE / "spec.json"
+    path = pathlib.Path(path)
+    if not path.is_absolute() and not path.exists():
+        path = HERE.parent / path
+    return json.loads(path.read_text())
 
 
 def state_from_pose(x, y, angle):
@@ -47,6 +63,13 @@ def state_from_spec_start(spec, batch=1):
 
 def _frac(a):
     return a - np.floor(a)
+
+
+def _wave(t):
+    """Smooth periodic wave in [-1, 1] (period 1) from + - * floor abs only: a triangle wave through the cubic u (3 - u^2) / 2,
+    which is flat at the crests and so has no kinks. Same expression order in raycaster.mjs."""
+    u = 4.0 * np.abs(_frac(t) - 0.5) - 1.0
+    return u * (1.5 - 0.5 * u * u)
 
 
 def pattern(name, p, u, v, mip):
@@ -122,6 +145,11 @@ class World:
         self.mip0, self.mip1 = spec["mip"]
         self.camx = (2.0 * (np.arange(self.W) + 0.5)) / self.W - 1.0
         self.bg_rows = self._background_rows()
+        # game v3: position tint + face shades (absent in the v2 spec: then the v2 renderer is used unchanged)
+        self.tint = spec.get("tint")
+        self.tint_gain = np.ones(nid)
+        for k, w in walls.items():
+            self.tint_gain[int(k)] = w.get("tint_gain", 1.0)
 
     # ------------------------------------------------------------------ background (ceiling / floor)
     def _background_rows(self):
@@ -154,6 +182,15 @@ class World:
 
     def cast(self, st, camx):
         """DDA for rays through screen positions `camx` [K]. Returns perp [B,K], side [B,K], wall id [B,K], u [B,K]."""
+        return self._cast(st, camx)[:4]
+
+    def cast_hits(self, st, camx):
+        """`cast` plus which face of the wall cell each ray hit and where (world coordinates): a `Hits` of [B,K] arrays."""
+        perp, side, wid, u, x, y, rdx, rdy = self._cast(st, camx)
+        face = np.where(side == 0, np.where(rdx > 0, FACE_W, FACE_E), np.where(rdy > 0, FACE_N, FACE_S))
+        return Hits(perp, side, wid, u, face, x + perp * rdx, y + perp * rdy)
+
+    def _cast(self, st, camx):
         x = st.x[:, None]
         y = st.y[:, None]
         px = (-st.dy * self.plane)[:, None]
@@ -197,16 +234,36 @@ class World:
         wx = wx - np.floor(wx)
         flip = ((side == 0) & (rdx > 0)) | ((side == 1) & (rdy < 0))
         u = np.where(flip, 1.0 - wx, wx)
-        return perp, side, wid, u
+        return perp, side, wid, u, x, y, rdx, rdy
 
     def distance_ahead(self, st):
         perp, _, _, _ = self.cast(st, np.array([0.0]))
         return perp[:, 0]
 
+    # ------------------------------------------------------------------ game v3: self-localising walls
+    def tint_offsets(self, hx, hy):
+        """Colour offsets (grey levels, [..., 3]) painted on the walls at world position (hx, hy): channel c is
+        amplitude * wave(ax_c * hx + ay_c * hy + phase_c). A smooth, low-frequency function of position only."""
+        t = self.tint
+        hx, hy = np.asarray(hx, dtype=np.float64), np.asarray(hy, dtype=np.float64)
+        return np.stack([t["amplitude"] * _wave(a * hx + b * hy + ph) for a, b, ph in t["waves"]], axis=-1)
+
+    def face_colour(self, cx, cy, face):
+        """Primary colour (grey levels, before fog) of face `face` of wall cell (cx, cy) at the centre of that face."""
+        wid = int(self.grid[cy, cx])
+        centre = {FACE_W: (cx, cy + 0.5), FACE_E: (cx + 1.0, cy + 0.5), FACE_N: (cx + 0.5, cy), FACE_S: (cx + 0.5, cy + 1.0)}[face]
+        base = self.rgb1[wid] + self.tint_gain[wid] * self.tint_offsets(*centre)
+        return base * self.tint["face_shade"][face]
+
     # ------------------------------------------------------------------ rendering
     def render(self, st):
         H, W = self.H, self.W
-        perp, side, wid, u = self.cast(st, self.camx)                      # [B, W]
+        if self.tint is None:
+            perp, side, wid, u = self.cast(st, self.camx)                  # [B, W]
+        else:
+            hits = self.cast_hits(st, self.camx)
+            perp, side, wid, u = hits.perp, hits.side, hits.wid, hits.u
+            toff = self.tint_offsets(hits.hx, hits.hy)                     # [B, W, 3], per column (the wall is vertical)
         B = perp.shape[0]
         lineh = H / perp
         half = H / 2.0
@@ -232,8 +289,13 @@ class World:
             if sel.any():
                 k[sel], m[sel], em[sel] = pattern(name, p, up[sel], vp[sel], mipc[sel])
         base = self.rgb1[wtp] + (self.rgb2[wtp] - self.rgb1[wtp]) * k[:, None]
-        c = base * m[:, None]
-        shade = np.where(side[bi, xi] == 1, self.side_shade, 1.0)
+        if self.tint is None:
+            c = base * m[:, None]
+            shade = np.where(side[bi, xi] == 1, self.side_shade, 1.0)
+        else:
+            base = base + toff[bi, xi] * self.tint_gain[wtp][:, None]
+            c = base * m[:, None]
+            shade = np.asarray(self.tint["face_shade"])[hits.face[bi, xi]]
         c = c * shade[:, None]
         t = perp * self.fog_k
         fw = (1.0 / (1.0 + t * t))[bi, xi]

@@ -41,6 +41,8 @@ def parse_args(argv=None):
     p.add_argument("--channels", default="64,64,64,64")
     p.add_argument("--depths", default="2,2,2,2")
     p.add_argument("--cond", type=int, default=256)
+    p.add_argument("--num-ctx", type=int, default=4, help="K: number of context frames (and actions) the model sees (v2 = 4)")
+    p.add_argument("--game", default=None, help="game spec json the training data comes from (default: game/spec_v2.json, the v2 game)")
     p.add_argument("--ctx-noise-max", type=float, default=0.5)
     p.add_argument("--ctx-noise-prob", type=float, default=0.9)
     p.add_argument("--ctx-blur-prob", type=float, default=0.0)
@@ -98,12 +100,14 @@ def to_batch(b, device):
 def sample_grid(model, windows, path, n=8, steps=3, ctx_sigma=0.1):
     """PNG: rows of [last context | truth | prediction | 4x abs error]."""
     from PIL import Image
+    n = min(n, len(windows["frames"]))
     w = {k: v[:n] for k, v in windows.items()}
     m = ev.one_step_metrics(model.denoise, w, steps=steps, ctx_sigma=ctx_sigma, return_pred=True)
     rows = []
+    T = w["frames"].shape[1]
     for i in range(n):
-        ctx = w["frames"][i, 3]
-        gt = w["frames"][i, 4]
+        ctx = w["frames"][i, T - 2]
+        gt = w["frames"][i, T - 1]
         pr = m["pred"][i]
         err = ((pr - gt).abs() * 2 - 1).clamp(-1, 1)
         row = torch.cat([ctx, gt, pr, err], dim=2)                   # [3, 64, 256]
@@ -121,9 +125,12 @@ def main(argv=None):
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
         torch.set_float32_matmul_precision("high")
+    if a.game is None:
+        a.game = "game/spec_v2.json"        # recorded in the checkpoint (relative to the repo root): evaluation and export use the same game
+    K = a.num_ctx
     cfg = DenoiserConfig(channels=tuple(int(c) for c in a.channels.split(",")),
                          depths=tuple(int(c) for c in a.depths.split(",")),
-                         attn=tuple(False for _ in a.channels.split(",")), cond_channels=a.cond,
+                         attn=tuple(False for _ in a.channels.split(",")), cond_channels=a.cond, num_ctx=K,
                          ctx_noise_max=a.ctx_noise_max, ctx_noise_prob=a.ctx_noise_prob,
                          ctx_blur_prob=a.ctx_blur_prob, ctx_blur_max=a.ctx_blur_max)
     torch.manual_seed(a.seed)
@@ -155,14 +162,14 @@ def main(argv=None):
 
     loss_fn = torch.compile(model.loss) if a.compile else model.loss
     loss_unrolled_fn = torch.compile(model.loss_unrolled) if a.compile else model.loss_unrolled
-    stream = BatchStream(a.batch, max(4 + a.unroll, 5 + a.rollout_ctx), base_seed=a.seed + 7919 * resumes)
+    stream = BatchStream(a.batch, max(K + a.unroll, K + 1 + a.rollout_ctx), base_seed=a.seed + 7919 * resumes, game=a.game)
     kw = dict(batch_size=None, num_workers=a.workers)
     if a.workers > 0:
         kw.update(prefetch_factor=a.prefetch, persistent_workers=True)
     loader = iter(DataLoader(stream, **kw))
 
-    world = rc.World()
-    val = ev.val_windows(world, n=a.eval_n, seed=999) if a.eval_every else None
+    world = rc.World(rc.load_spec(a.game))
+    val = ev.val_windows(world, n=a.eval_n, seed=999, K=K) if a.eval_every else None
     amp_dtype = {"none": None, "bf16": torch.bfloat16, "fp16": torch.float16}[a.amp]
     scaler = torch.amp.GradScaler("cuda") if (a.amp == "fp16" and device.type == "cuda") else None
 
@@ -195,10 +202,10 @@ def main(argv=None):
         model.train()
         def compute_loss():
             if a.rollout_ctx > 0:
-                return model.loss_rollout(frames[:, :5 + a.rollout_ctx], act, rollout=a.rollout_ctx, prob=a.rollout_prob)
+                return model.loss_rollout(frames[:, :K + 1 + a.rollout_ctx], act, rollout=a.rollout_ctx, prob=a.rollout_prob)
             if a.unroll > 1:
                 return loss_unrolled_fn(frames, act, a.unroll)
-            return loss_fn(frames[:, :4], frames[:, 4], act[:, :4])
+            return loss_fn(frames[:, :K], frames[:, K], act[:, :K])
 
         if amp_dtype is not None:
             with torch.autocast(device_type=device.type, dtype=amp_dtype):

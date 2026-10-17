@@ -5,8 +5,8 @@ to fp16, verify against PyTorch, and write test vectors for the in-browser self-
 Graph interface (all float32; fp16 variants keep float32 inputs/outputs):
     x [1,3,64,64]     noisy next frame at noise level sigma
     sigma [1]         noise level (the EDM preconditioning is inside the graph)
-    ctx [1,12,64,64]  the 4 context frames (already noised with ctx_sigma by the caller), in [-1, 1]
-    act [1,4,9]       one-hot actions (move 3 | strafe 3 | turn 3) of the last 4 steps
+    ctx [1,3K,64,64]  the K context frames (K = 4 for v2; already noised with ctx_sigma by the caller), in [-1, 1]
+    act [1,K,9]       one-hot actions (move 3 | strafe 3 | turn 3) of the last K steps
     ctx_sigma [1]     noise level that was added to the context
     -> denoised [1,3,64,64]  D(x; sigma), clamped to [-1, 1]
 
@@ -56,11 +56,11 @@ class OnnxDenoiser(torch.nn.Module):
         return self.m.denoise_flat(x, sigma, ctx, act, ctx_sigma)
 
 
-def example_inputs(seed=0, sigma=0.7, ctx_sigma=0.1):
+def example_inputs(seed=0, sigma=0.7, ctx_sigma=0.1, K=4):
     g = torch.Generator().manual_seed(seed)
     x = torch.randn(1, 3, 64, 64, generator=g)
-    ctx = torch.rand(1, 12, 64, 64, generator=g) * 2 - 1
-    act = encode_actions(torch.randint(0, 3, (1, 4, 3), generator=g))
+    ctx = torch.rand(1, 3 * K, 64, 64, generator=g) * 2 - 1
+    act = encode_actions(torch.randint(0, 3, (1, K, 3), generator=g))
     return x, torch.tensor([sigma]), ctx, act, torch.tensor([ctx_sigma])
 
 
@@ -131,7 +131,7 @@ def export_onnx(model: Denoiser, path: str, opset: int = 17, optimize: bool = Tr
     model = copy.deepcopy(model).eval().cpu()
     model.inner.conv_in = PaddedConv(model.inner.conv_in)
     raw = path if not optimize else path + ".raw.onnx"
-    torch.onnx.export(OnnxDenoiser(model), example_inputs(), raw, input_names=INPUTS, output_names=["denoised"],
+    torch.onnx.export(OnnxDenoiser(model), example_inputs(K=model.cfg.num_ctx), raw, input_names=INPUTS, output_names=["denoised"],
                       opset_version=opset, dynamo=False, do_constant_folding=True)
     if optimize:
         import os
@@ -170,6 +170,13 @@ def load_ema(ckpt_path: str) -> Denoiser:
     return m.eval(), ck.get("step", -1)
 
 
+def ckpt_game(ckpt_path: str) -> str:
+    """The game spec (path relative to the repo root) a checkpoint was trained on; checkpoints from before v3 did not
+    record it and were all trained on the v2 game."""
+    ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    return (ck.get("args") or {}).get("game") or "game/spec_v2.json"
+
+
 def verify(model: Denoiser, onnx_path: str, cases) -> dict:
     import onnxruntime as ort
     sess = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
@@ -182,19 +189,20 @@ def verify(model: Denoiser, onnx_path: str, cases) -> dict:
     return {"max_abs_diff_vs_pytorch": worst, "cases": len(cases)}
 
 
-def real_cases(model: Denoiser, n=3):
+def real_cases(model: Denoiser, n=3, game=None):
     """Test inputs built from real game windows at several noise levels (also saved for the browser self-test)."""
     from game import raycaster as rc
     from model import evaluate as ev
-    w = ev.val_windows(rc.World(), n=n, seed=4242)
+    K = model.cfg.num_ctx
+    w = ev.val_windows(rc.World(rc.load_spec(game)), n=n, seed=4242, K=K)
     cases = []
     for i, (sigma, cs) in enumerate([(5.0, 0.1), (0.3, 0.1), (0.02, 0.0)][:n]):
-        ctx = w["frames"][i:i + 1, :4]
-        tgt = w["frames"][i:i + 1, 4]
+        ctx = w["frames"][i:i + 1, :K]
+        tgt = w["frames"][i:i + 1, K]
         g = torch.Generator().manual_seed(100 + i)
         x = tgt + torch.randn(tgt.shape, generator=g) * sigma
-        act = encode_actions(w["actions"][i:i + 1, :4])
-        cases.append((x, torch.tensor([sigma]), ctx.reshape(1, 12, 64, 64), act, torch.tensor([cs])))
+        act = encode_actions(w["actions"][i:i + 1, :K])
+        cases.append((x, torch.tensor([sigma]), ctx.reshape(1, 3 * K, 64, 64), act, torch.tensor([cs])))
     return cases
 
 
@@ -204,6 +212,7 @@ def main():
     ap.add_argument("--random-init", action="store_true", help="export random weights (speed benchmarks only)")
     ap.add_argument("--channels", default="32,64,96,128")
     ap.add_argument("--depths", default="2,2,2,2")
+    ap.add_argument("--game", default=None, help="game spec json for the test vectors (default: the one the checkpoint was trained on)")
     ap.add_argument("--out", default="site/models")
     ap.add_argument("--name", default="dream")
     ap.add_argument("--ctx-sigma", type=float, default=0.1, help="default context-noise level used by the demo sampler")
@@ -222,6 +231,8 @@ def main():
         model, step = Denoiser(cfg).eval(), -1
     else:
         model, step = load_ema(a.ckpt)
+    game = a.game or (None if a.random_init else ckpt_game(a.ckpt))
+    K = model.cfg.num_ctx
     n_params = sum(p.numel() for p in model.parameters())
     p32 = out / f"{a.name}_fp32.onnx"
     export_onnx(model, str(p32))
@@ -232,16 +243,16 @@ def main():
         to_fp16(str(p32), str(p16))
         report["fp16"] = describe(str(p16))
     if a.verify:
-        cases = [example_inputs(0, 0.7, 0.1), example_inputs(1, 0.01, 0.0), example_inputs(2, 5.0, 0.3)]
+        cases = [example_inputs(0, 0.7, 0.1, K), example_inputs(1, 0.01, 0.0, K), example_inputs(2, 5.0, 0.3, K)]
         if not a.random_init:
-            cases = real_cases(model) + cases
+            cases = real_cases(model, game=game) + cases
         report["verify_fp32"] = verify(model, str(p32), cases)
         if a.fp16:
             report["verify_fp16"] = verify(model, str(p16), cases)
         if not a.random_init:
             # test vectors for the browser self-test: per case [x | ctx | act | out] as float32 + a json index
             blob, index = [], []
-            for xs in real_cases(model):
+            for xs in real_cases(model, game=game):
                 with torch.no_grad():
                     ref = model.denoise_flat(*xs).numpy()
                 parts = [xs[0].numpy(), xs[2].numpy(), xs[3].numpy(), ref]

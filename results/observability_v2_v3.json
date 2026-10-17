@@ -1,0 +1,53 @@
+{
+ "script": "python tools/observability.py ",
+ "bank_frames": 20000,
+ "method": "nearest neighbour (8x8 pooled colours) among bank frames of uniformly random poses; queries are flat-wall frames plus Gaussian noise",
+ "v2": {
+  "noise_4": {
+   "n_flat_queries": 1248,
+   "flat_share_of_random_poses": 0.208,
+   "noise_grey_levels": 4.0,
+   "pos_err_median": 1.89026144255268,
+   "pos_err_p90": 8.533652617816838,
+   "within_0.75_cells": 0.37099358974358976,
+   "within_1.5_cells": 0.46073717948717946,
+   "heading_err_median_deg": 11.845264766845565,
+   "heading_within_45deg": 0.7051282051282052
+  },
+  "noise_8": {
+   "n_flat_queries": 1248,
+   "flat_share_of_random_poses": 0.208,
+   "noise_grey_levels": 8.0,
+   "pos_err_median": 1.8864437162060734,
+   "pos_err_p90": 8.533652617816838,
+   "within_0.75_cells": 0.3701923076923077,
+   "within_1.5_cells": 0.46153846153846156,
+   "heading_err_median_deg": 11.911690896195719,
+   "heading_within_45deg": 0.7043269230769231
+  }
+ },
+ "v3": {
+  "noise_4": {
+   "n_flat_queries": 1248,
+   "flat_share_of_random_poses": 0.208,
+   "noise_grey_levels": 4.0,
+   "pos_err_median": 0.2498010701315267,
+   "pos_err_p90": 1.2459257765466234,
+   "within_0.75_cells": 0.8597756410256411,
+   "within_1.5_cells": 0.9126602564102564,
+   "heading_err_median_deg": 10.66967517907076,
+   "heading_within_45deg": 0.9591346153846154
+  },
+  "noise_8": {
+   "n_flat_queries": 1248,
+   "flat_share_of_random_poses": 0.208,
+   "noise_grey_levels": 8.0,
+   "pos_err_median": 0.2498010701315267,
+   "pos_err_p90": 1.2459257765466234,
+   "within_0.75_cells": 0.8605769230769231,
+   "within_1.5_cells": 0.9126602564102564,
+   "heading_err_median_deg": 10.66967517907076,
+   "heading_within_45deg": 0.9591346153846154
+  }
+ }
+}

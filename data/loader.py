@@ -62,13 +62,14 @@ try:
     class BatchStream(torch.utils.data.IterableDataset):
         """Yields dicts of torch tensors forever; each DataLoader worker gets its own seed."""
 
-        def __init__(self, batch_size, seq_len, base_seed=0):
-            self.batch_size, self.seq_len, self.base_seed = batch_size, seq_len, base_seed
+        def __init__(self, batch_size, seq_len, base_seed=0, game=None):
+            self.batch_size, self.seq_len, self.base_seed, self.game = batch_size, seq_len, base_seed, game
 
         def __iter__(self):
             info = torch.utils.data.get_worker_info()
             wid = info.id if info else 0
-            src = TrajectorySource(rc.World(), self.batch_size, self.seq_len, seed=self.base_seed * 1000 + wid)
+            src = TrajectorySource(rc.World(rc.load_spec(self.game)), self.batch_size, self.seq_len,
+                                   seed=self.base_seed * 1000 + wid)
             while True:
                 b = src.next_batch()
                 yield {"frames": torch.from_numpy(b["frames"]), "actions": torch.from_numpy(b["actions"])}
