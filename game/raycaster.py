@@ -49,45 +49,47 @@ def _frac(a):
     return a - np.floor(a)
 
 
-def pattern(name, p, u, v):
-    """Wall texture. u, v in [0, 1): position along the wall face / down the wall.
+def pattern(name, p, u, v, mip):
+    """Wall texture. u, v in [0, 1): position along the wall face / down the wall; mip in [0, 1]: 1 = full detail,
+    0 = the pattern's mean colour (distance pre-filtering, see spec["mip"]).
     Returns (k, m, em): colour-mix mask (0 -> rgb, 1 -> rgb2), brightness multiplier, emission mask."""
     one = np.ones_like(u)
     zero = np.zeros_like(u)
     if name == "blocks":
-        rows, cols, mv, mu = p
+        rows, cols, mv, mu, kbar = p
         vr = v * rows
         rr = np.floor(vr)
         odd = rr - 2.0 * np.floor(rr * 0.5)
         uu = u * cols + 0.5 * odd
         k = ((vr - rr < mv) | (_frac(uu) < mu)).astype(np.float64)
-        return k, one, zero
+        return kbar + (k - kbar) * mip, one, zero
     if name == "frame":
-        t = p[0]
+        t, kbar = p
         k = ((u < t) | (u >= 1.0 - t) | (v < t) | (v >= 1.0 - t)).astype(np.float64)
-        return k, one, zero
+        return kbar + (k - kbar) * mip, one, zero
     if name == "pillar":
-        rings, ringw = p
+        rings, ringw, kbar = p
         t = 2.0 * u - 1.0
         m = 0.6 + 0.4 * (1.0 - t * t)
         k = (_frac(v * rings) < ringw).astype(np.float64)
-        return k, m, one
+        return kbar + (k - kbar) * mip, m, one
     if name == "windows":
-        n, a0, a1, v0, v1 = p
+        n, a0, a1, v0, v1, kbar = p
         a = _frac(u * n)
         k = ((a >= a0) & (a < a1) & (v >= v0) & (v < v1)).astype(np.float64)
-        return k, one, k
+        kf = kbar + (k - kbar) * mip
+        return kf, one, kf
     if name == "moss":
-        n = p[0]
+        n, kbar = p
         w = np.floor(u * n) * 7.0
         r = w - 5.0 * np.floor(w / 5.0)
         k = (r < 2.0).astype(np.float64)
-        return k, 0.8 + 0.2 * v, zero
+        return kbar + (k - kbar) * mip, 0.8 + 0.2 * v, zero
     if name == "dado":
-        v0, lw = p
+        v0, lw, kbar = p
         k = (v >= v0).astype(np.float64)
-        m = np.where((v >= v0) & (v < v0 + lw), 1.3, 1.0)
-        return k, m, zero
+        m = 1.0 + np.where((v >= v0) & (v < v0 + lw), 0.3, 0.0) * mip
+        return kbar + (k - kbar) * mip, m, zero
     raise ValueError(name)
 
 
@@ -117,6 +119,7 @@ class World:
         self.fog_k = spec["fog_k"]
         self.fog = np.array(spec["fog_color"], dtype=np.float64)
         self.side_shade = spec["side_shade"]
+        self.mip0, self.mip1 = spec["mip"]
         self.camx = (2.0 * (np.arange(self.W) + 0.5)) / self.W - 1.0
         self.bg_rows = self._background_rows()
 
@@ -222,10 +225,12 @@ class World:
         k = np.zeros(len(bi))
         m = np.ones(len(bi))
         em = np.zeros(len(bi))
+        mip_t = (self.mip1 - perp) / (self.mip1 - self.mip0)
+        mipc = np.minimum(np.maximum(mip_t, 0.0), 1.0)[bi, xi]
         for i, (name, p) in self.patterns.items():
             sel = wtp == i
             if sel.any():
-                k[sel], m[sel], em[sel] = pattern(name, p, up[sel], vp[sel])
+                k[sel], m[sel], em[sel] = pattern(name, p, up[sel], vp[sel], mipc[sel])
         base = self.rgb1[wtp] + (self.rgb2[wtp] - self.rgb1[wtp]) * k[:, None]
         c = base * m[:, None]
         shade = np.where(side[bi, xi] == 1, self.side_shade, 1.0)

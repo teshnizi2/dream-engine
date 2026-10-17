@@ -103,8 +103,8 @@ def test_batch_render_equals_single_renders(world):
 
 def test_fog_dims_a_distant_wall(world):
     # same stone wall (hall north wall, col 8) seen from 1.1 cells away and from 5.1 cells away
-    near = world.render(S(8.5, 5.5, -90.0))[0, 32, 32].astype(float).sum()
-    far = world.render(S(8.5, 9.5, -90.0))[0, 32, 32].astype(float).sum()
+    near = world.render(S(8.5, 5.5, -90.0))[0, 22:26, 30:34].astype(float).sum(-1).mean()   # wall fills the view
+    far = world.render(S(8.5, 9.5, -90.0))[0, 27:30, 30:34].astype(float).sum(-1).mean()    # wall spans rows 25-39
     assert near > far * 1.15
 
 
@@ -129,8 +129,34 @@ def test_blue_doorway_wall_looks_blue(world):
 def test_window_gallery_wall_is_striped(world):
     f = world.render(S(7.5, 1.5, -90.0))[0].astype(float)   # north wall of the gallery, 1 cell away
     row = f[32, :, :].sum(-1)
-    assert row.max() - row.min() > 250, "bright windows against dark frames"
-    assert (np.abs(np.diff(row)) > 150).sum() >= 6, "several stripe edges across the view"
+    assert row.max() - row.min() > 200, "bright windows against dark frames"
+    assert (np.abs(np.diff(row)) > 100).sum() >= 4, "several window edges across the view"
+
+
+def test_fine_texture_fades_to_a_flat_colour_with_distance(world):
+    """Pixel-sized patterns on far walls alias into noise that no small network can predict, so textures are
+    pre-filtered: full detail up close, the wall's mean colour beyond ~7 cells."""
+    # ochre end wall of the south corridor (2x2 blocks with mortar lines): 1.5 cells away vs 13.5 cells away
+    near = world.render(S(13.5, 12.5, 0.0))[0].astype(float)[8:56, 30:34].sum(-1)
+    far = world.render(S(1.5, 12.5, 0.0))[0].astype(float)[31:34, 30:34].sum(-1)           # the wall is ~5 px tall here
+    assert near.std(axis=0).max() > 12, "visible mortar lines up close"
+    assert far.std() < 3, "no texture left at 13 cells"
+
+
+def test_window_stripes_are_wide_enough_to_be_learnable(world):
+    """Stripes were 5% of the pixels and 65% of a trained model's squared error; a pane should span several pixels."""
+    f = world.render(S(7.5, 2.5, -90.0))[0].astype(float)   # 1.5 cells from the window wall: panes ~10 px wide
+    row = f[32, :, :].sum(-1)
+    bright = row > 0.5 * (row.max() + row.min())
+    runs, cur = [], 0
+    for b in bright:
+        if b:
+            cur += 1
+        elif cur:
+            runs.append(cur)
+            cur = 0
+    runs = [r for r in runs if r > 1]
+    assert runs and min(runs) >= 5, runs
 
 
 # ---------------------------------------------------------------- dynamics

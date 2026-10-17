@@ -11,41 +11,47 @@ const frac = (a) => a - Math.floor(a);
 // pattern outputs (written into these to avoid allocations in the pixel loop)
 let PK = 0, PM = 1, PEM = 0;
 
-function pattern(name, p, u, v) {
+function pattern(name, p, u, v, mip) {
   switch (name) {
     case 'blocks': {
       const vr = v * p[0];
       const rr = Math.floor(vr);
       const odd = rr - 2.0 * Math.floor(rr * 0.5);
       const uu = u * p[1] + 0.5 * odd;
-      PK = (vr - rr < p[2] || frac(uu) < p[3]) ? 1 : 0; PM = 1; PEM = 0;
+      const k = (vr - rr < p[2] || frac(uu) < p[3]) ? 1 : 0;
+      PK = p[4] + (k - p[4]) * mip; PM = 1; PEM = 0;
       return;
     }
     case 'frame': {
       const t = p[0];
-      PK = (u < t || u >= 1.0 - t || v < t || v >= 1.0 - t) ? 1 : 0; PM = 1; PEM = 0;
+      const k = (u < t || u >= 1.0 - t || v < t || v >= 1.0 - t) ? 1 : 0;
+      PK = p[1] + (k - p[1]) * mip; PM = 1; PEM = 0;
       return;
     }
     case 'pillar': {
       const t = 2.0 * u - 1.0;
       PM = 0.6 + 0.4 * (1.0 - t * t);
-      PK = frac(v * p[0]) < p[1] ? 1 : 0; PEM = 1;
+      const k = frac(v * p[0]) < p[1] ? 1 : 0;
+      PK = p[2] + (k - p[2]) * mip; PEM = 1;
       return;
     }
     case 'windows': {
       const a = frac(u * p[0]);
-      PK = (a >= p[1] && a < p[2] && v >= p[3] && v < p[4]) ? 1 : 0; PM = 1; PEM = PK;
+      const k = (a >= p[1] && a < p[2] && v >= p[3] && v < p[4]) ? 1 : 0;
+      PK = p[5] + (k - p[5]) * mip; PM = 1; PEM = PK;
       return;
     }
     case 'moss': {
       const w = Math.floor(u * p[0]) * 7.0;
       const r = w - 5.0 * Math.floor(w / 5.0);
-      PK = r < 2.0 ? 1 : 0; PM = 0.8 + 0.2 * v; PEM = 0;
+      const k = r < 2.0 ? 1 : 0;
+      PK = p[1] + (k - p[1]) * mip; PM = 0.8 + 0.2 * v; PEM = 0;
       return;
     }
     case 'dado': {
-      PK = v >= p[0] ? 1 : 0;
-      PM = (v >= p[0] && v < p[0] + p[1]) ? 1.3 : 1.0; PEM = 0;
+      const k = v >= p[0] ? 1 : 0;
+      PM = 1.0 + ((v >= p[0] && v < p[0] + p[1]) ? 0.3 : 0.0) * mip;
+      PK = p[2] + (k - p[2]) * mip; PEM = 0;
       return;
     }
     default:
@@ -82,6 +88,7 @@ export class World {
     }
     this.plane = spec.plane; this.fogK = spec.fog_k; this.fog = spec.fog_color;
     this.sideShade = spec.side_shade;
+    this.mip0 = spec.mip[0]; this.mip1 = spec.mip[1];
     this.camx = new Float64Array(this.W);
     for (let i = 0; i < this.W; i++) this.camx[i] = (2.0 * (i + 0.5)) / this.W - 1.0;
     this.bg = this._backgroundRows();
@@ -169,6 +176,8 @@ export class World {
       const shade = this._side[i] === 1 ? this.sideShade : 1.0;
       const t = perp * this.fogK;
       const fw = 1.0 / (1.0 + t * t);
+      const mt = (this.mip1 - perp) / (this.mip1 - this.mip0);
+      const mip = Math.min(1.0, Math.max(0.0, mt));
       const rgb1 = this.rgb1[wid], rgb2 = this.rgb2[wid];
       const pat = this.pat[wid];
       const emit = this.emit[wid];
@@ -177,7 +186,7 @@ export class World {
         const yc = y + 0.5;
         if (yc >= top && yc < bot) {
           const v = (yc - top) / lineh;
-          pattern(pat[0], pat[1], u, v);
+          pattern(pat[0], pat[1], u, v, mip);
           const e = emit * PEM;
           const f2 = fw + (1.0 - fw) * e;
           for (let c = 0; c < 3; c++) {
