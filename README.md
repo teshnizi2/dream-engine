@@ -191,6 +191,26 @@ Every row evaluated with the same code and the demo's sampler (2 Euler steps, `u
 
 Change in the mean PSNR over the first 32 frames against the plain control: DIAMOND-style unroll 3 -0.2 dB, context blur augmentation -0.2 dB, scheduled sampling, 3 own frames, p 0.5 -0.2 dB. None of them beats the control by more than the run-to-run noise (about 0.4 dB: the plain control itself moved the means by that much). Context blur: nearest-real-frame PSNR 29.8 dB against 29.9 for the control (true frames: 24.4). Scheduled sampling changes the 1-step PSNR by -0.8 dB.
 
+#### v3: can the flat-wall collapse be fixed? (pre-registered: `docs/PREREG-v3.md`)
+
+
+Long dreams collapse onto flat wall views and stay there. The hypothesis was observability: with 4 context frames a close-up wall carries no information about where the player is (walls of one colour region are identical, and so are N and S faces), so once the context is all wall the model has nothing to localise from. **Game v3** gives every wall face its own low-frequency colour signature (a smooth tint of the hit position, 12 grey levels, periods of at least 5 cells) and four distinct face shades, keeping the map, physics, floor, ceiling, fog and landmarks; the JavaScript twin stays bit-exact with the Python reference. The second change was a longer context, K = 8 against K = 4.
+
+A model-free check on rendered frames (nearest-neighbour pose recovery from flat-wall views with noise, `results/observability_v2_v3.json`): the recovered position is within 1.5 cells 46% of the time in v2 and 91% in v3, the heading within 45 degrees 71% and 96%. The information is in the v3 frames; whether a trained network uses it is what was tested. The 142 visible wall faces are at least 3.9 grey levels apart (`results/signature_design_v3.json`).
+
+**Metrics, fixed before any v3 model existed.** Every model wakes up at the same real frame (the 8th) on the same 64 episodes and dreams 512 frames with the demo's sampler. *Tracking horizon*: the first frame whose 5-frame average PSNR is below 20 dB, median over episodes. *Collapse rate*: the fraction of dream frames at 64 to 512 that are *stuck on a flat wall* (at most 5% floor or ceiling pixels in each of the last 32 frames) while the matching real frame is not; the real game itself is flat-wall in about a quarter of its frames, which is why the metric asks the dream to stay there (window and thresholds were fixed on v2 rollouts, `docs/PREREG-v3.md` section 4). *Spin return*: PSNR between the start view and the view after a full 360 degree turn.
+
+**20k-step ablation** (same recipe as `w2_B`, one run each, 64 episodes x 512 frames):
+
+| run | game | K | steps | median frames until < 20 dB (middle half) | collapse rate (95% interval) | single-frame collapse rate | flat-wall share dream / real | 360 degree spin return, dB | 1-step PSNR dB (copy-last) | mean PSNR, first 32 frames | collapse rate relative to the baseline (paired 95% interval) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| w2_B (baseline) | v2 | 4 | 20,000 | 14 (6 to 26) | 0.667 (0.61 to 0.72) | 0.620 | 0.84 / 0.25 | 15.1 | 31.4 (24.2) | 21.2 | 1 |
+| v2k8 | v2 | 8 | 20,000 | 14 (5 to 24) | 0.670 (0.61 to 0.73) | 0.616 | 0.83 / 0.25 | 15.3 | 31.4 (24.2) | 21.0 | 1.00 (0.92 to 1.09) |
+| v3k4 | v3 | 4 | 20,000 | 16 (7 to 27) | 0.542 (0.48 to 0.61) | 0.554 | 0.76 / 0.25 | 15.2 | 31.8 (24.7) | 21.7 | 0.81 (0.72 to 0.90) |
+| v3k8 | v3 | 8 | 20,000 | 13 (7 to 28) | 0.498 (0.43 to 0.57) | 0.511 | 0.71 / 0.25 | 14.8 | 31.8 (24.7) | 21.5 | 0.75 (0.65 to 0.85) |
+
+Selection rule (fixed in advance): 1 of 3 variants have a median horizon of at least the baseline's (14.0); collapse rates within 0.02 of the lowest (0.542): ['v3k4']; chosen: v3k4.
+
 ## How to run
 
 ```bash

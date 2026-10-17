@@ -43,3 +43,13 @@ def test_v3_section_states_a_negative_result_plainly(tmp_path):
 def test_v3_section_is_empty_without_results(tmp_path):
     import fill_readme as F
     assert F.v3_section(tmp_path) == ""
+
+
+def test_the_at_a_glance_line_states_the_verdict_in_one_sentence(tmp_path):
+    import fill_readme as F
+    populate(tmp_path, adopt=False)
+    line = F.v3_glance(tmp_path)
+    assert line.startswith("* ") and "pre-registered" in line and "did not meet" in line and "v2 stays shipped" in line
+    populate(tmp_path, adopt=True)
+    assert "met" in F.v3_glance(tmp_path) and "did not meet" not in F.v3_glance(tmp_path)
+    assert F.v3_glance(tmp_path / "nowhere") == ""

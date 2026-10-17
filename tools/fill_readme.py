@@ -148,6 +148,23 @@ def v3_section(res=None):
     return "\n\n".join(out)
 
 
+def v3_glance(res=None):
+    """One bullet for 'At a glance': the verdict of the pre-registered v3 rule (empty if there is no final comparison yet)."""
+    res = pathlib.Path(res) if res else ROOT / "results"
+    fin = next((f for f in sorted(res.glob("prereg_final_*_vs_*.json"))), None)
+    fin = _load_abs(fin) if fin else None
+    if not fin:
+        return ""
+    new, ref, ad = fin["new"], fin["ref"], fin["adoption"]
+    nums = (f"collapse rate {new['collapse']:.2f} against {ref['collapse']:.2f}, median tracking horizon {new['horizon_median']:.0f} against {ref['horizon_median']:.0f} frames "
+            f"(64 episodes x 512 frames, same protocol)")
+    if ad["adopt"]:
+        return (f"* **Self-localising walls (game v3) met the pre-registered adoption rule for the flat-wall collapse** (at most half the collapse rate, no shorter horizon): {nums}. "
+                "What still fails is listed under \"Honest limits\".")
+    return (f"* A pre-registered attempt to fix the collapse onto flat wall views (v3: every wall face gets its own colour signature, plus a longer context) **did not meet its adoption rule**: {nums}; "
+            "v2 stays shipped and v3 is documented as a negative result (see \"What was tried\").")
+
+
 def ablation_tables():
     """What was tried (all single runs; results/ablation/*.json written by eval.py on ALICE)."""
     def ev(n):
@@ -456,6 +473,8 @@ def build(a):
     text = pathlib.Path(ROOT / "README.template.md").read_text()
     text = text.replace("@@RESULTS_TABLES@@", "\n\n".join(sections))
     text = text.replace("@@ABLATIONS@@", ablation_tables())
+    glance = v3_glance()
+    text = text.replace("@@V3_GLANCE@@\n", glance + "\n" if glance else "")
     limits = (ROOT / a.limits).read_text() if a.limits and (ROOT / a.limits).exists() else "@@LIMITS@@"
     text = text.replace("@@LIMITS@@", limits.strip())
     for k, v in tok.items():

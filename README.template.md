@@ -16,6 +16,7 @@ imagining every frame from the same keypresses, with no game code.
 * One step ahead it is **@@ONE_STEP_PSNR@@ dB** (copy-the-last-frame gets @@COPY_PSNR@@ dB). Left to dream, it **tracks the real game for about @@TRACK20@@ frames** (@@TRACK20_NOTE@@), then wanders into a different, still game-like place: **@@ROLL_PSNR_32@@ dB after 32 frames, @@ROLL_PSNR_128@@ dB after 128** (an unrelated frame scores @@FLOOR_PSNR@@ dB).
 * @@CONTROLS@@ A full 360 degree spin does **not** return to the starting view (@@SPIN_BACK@@ dB): no map memory.
 * The biggest lesson: the bottleneck was the game, not the network (see "What was tried").
+@@V3_GLANCE@@
 
 ## What it is
 
