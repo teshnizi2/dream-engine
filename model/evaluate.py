@@ -1,6 +1,6 @@
 """Evaluation helpers: fixed validation windows, 1-step prediction PSNR/SSIM and autoregressive-rollout drift
 curves against the true game. `denoise_fn(x, sigma, ctx, act, s_c)` is `Denoiser.denoise` (or any stand-in)."""
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 import numpy as np
 import torch

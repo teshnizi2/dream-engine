@@ -117,7 +117,6 @@ def fuse_silu(src: str, dst: str) -> int:
         if not progressed:
             raise RuntimeError("could not topologically order the fused graph")
     g.node.extend(out)
-    keep = {"": 17, "ai.onnx": 17}
     doms = {o.domain: o.version for o in m.opset_import}
     del m.opset_import[:]
     m.opset_import.append(helper.make_opsetid("", max(doms.get("", 17), doms.get("ai.onnx", 17))))

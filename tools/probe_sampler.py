@@ -17,8 +17,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from game import raycaster as rc  # noqa: E402
-from model import evaluate as ev, metrics  # noqa: E402
-from model.sampler import rollout  # noqa: E402
+from model import evaluate as ev  # noqa: E402
 from export import load_ema  # noqa: E402
 
 

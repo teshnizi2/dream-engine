@@ -94,7 +94,6 @@ def build(a):
         tok["MAIN_HOURS"] = f"{train['main_gpu_hours']:.1f}"
         tok["TOTAL_GPUH"] = f"{train['total_gpu_hours']:.1f}"
     if fps:
-        by = {r["steps"]: r for r in fps["runs"]}
         tok["FPS3"] = f"{fps['summary']['3']['fps_counted_median']:.0f}"
         tok["FPS1"] = f"{fps['summary']['1']['fps_counted_median']:.0f}"
     sections = []

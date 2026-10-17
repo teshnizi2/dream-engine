@@ -15,7 +15,6 @@ import signal
 import sys
 import time
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -99,7 +98,6 @@ def to_batch(b, device):
 def sample_grid(model, windows, path, n=8, steps=3, ctx_sigma=0.1):
     """PNG: rows of [last context | truth | prediction | 4x abs error]."""
     from PIL import Image
-    dev = next(model.parameters()).device
     w = {k: v[:n] for k, v in windows.items()}
     m = ev.one_step_metrics(model.denoise, w, steps=steps, ctx_sigma=ctx_sigma, return_pred=True)
     rows = []
@@ -190,7 +188,6 @@ def main(argv=None):
     t0 = time.time()
     t_log, loss_acc, n_acc = time.time(), torch.zeros((), device=device), 0
     ema_p, mod_p = list(ema.parameters()), list(model.parameters())
-    last_ck_step = step
     while step < a.steps and not stop["flag"]:
         frames, act = to_batch(next(loader), device)
         for g in opt.param_groups:
@@ -249,7 +246,6 @@ def main(argv=None):
             sample_grid(ema, val, out / "samples" / f"step_{step:07d}.png")
         if a.ckpt_every and step % a.ckpt_every == 0:
             checkpoint()
-            last_ck_step = step
         if a.time_limit_min and (time.time() - t0) / 60 >= a.time_limit_min:
             print(f"time limit {a.time_limit_min} min reached at step {step}", flush=True)
             break
