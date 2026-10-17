@@ -35,3 +35,14 @@ DIAMOND's recipe, 150k steps, 3.3 A100-hours.
 | "the video re-seeds the dream every 1.25 s" (caption in the video) | `tools/capture_video.mjs --wake-every 30`, 24 fps |
 
 Say in the comments that the video re-seeds the dream from the real game every 30 game ticks (1.25 s of video); in the live demo it is pure imagination until you press Wake up.
+
+## Follow-up material (v3 attempt; not part of the 120-word draft, never posted)
+
+If someone asks about the "collapses onto flat walls" part: I tried to fix it with a pre-registered experiment. Every wall face got its own colour signature (and each of the four directions its own shade), so that even a close-up of a wall says where you are, and I also tried a longer context. It did not work: the collapse rate was 0.33 for the new game against 0.16 for the shipped one (the rule was "at most half"), although the network clearly learned to read the colours (shifting them cost it about 0.85 dB). A longer context alone changed nothing (0.67 against 0.67 at 20k steps). So v2 stays the demo and the video still re-seeds the dream every 1.25 s. Single training runs, one map, 64 episodes: a negative result, not a proof that it cannot work.
+
+| claim | file |
+|---|---|
+| collapse rate (stuck on a flat wall for 32 frames, frames 64 to 512, 64 episodes): 0.33 for the signature game, 0.16 for the shipped one; the rule was "at most half" | `results/prereg_final_full2_vs_full1.json` |
+| longer context alone: 0.670 against 0.667 at 20k steps | `results/prereg_ablation.json` |
+| the network reads the signature: 0.85 dB lost in the escape test when it is shifted | `results/signature_use_full2.json` |
+| the dream leaves a flat wall in 3.3% of frames (shipped model), the real game in 6.3% | `results/flat_spells.json` |

@@ -26,7 +26,7 @@ imagining every frame from the same keypresses, with no game code.
 | Twins | the same game in Python (numpy, vectorised) and JavaScript, **100.0000% identical pixels, max abs diff 0** over 1112 frames (`results/game_parity.json`) |
 | Model | DIAMOND-style EDM U-Net, **6.77M parameters** (widths 32-64-96-128, 2 residual blocks per level, attention in the 8x8 middle block), conditioned on the last 4 frames (channel concat) and the last 4 actions (adaptive GroupNorm); context-noise augmentation from GameNGen |
 | Data | never stored: every training batch is generated on the fly by a sticky-random exploration policy (1699 frames/s per process; coverage entropy 0.995 of 1.0, no open cell without samples; `results/coverage.png`) |
-| Training | ALICE (Leiden), one A100 per job, bf16, batch 128: **150,000 steps = 3.3 GPU-hours** for the main run (Slurm wall time, including the evaluation that closes the job), 7.4 GPU-hours in total including ablations, smoke tests and cancelled jobs (`RUNS.md`, `results/training_summary.json`) |
+| Training | ALICE (Leiden), one A100 per job, bf16, batch 128: **150,000 steps = 3.3 GPU-hours** for the main run (Slurm wall time, including the evaluation that closes the job), 12.9 GPU-hours in total including ablations, smoke tests and cancelled jobs (`RUNS.md`, `results/training_summary.json`) |
 | Browser | onnxruntime-web 1.30.0, WebGPU with graph capture (fp16), WASM fallback; **20 fps with 3 denoising steps, 30 with 1** on an Apple M4 that was shared with other jobs (see "Speed") |
 
 ## Results

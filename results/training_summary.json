@@ -241,11 +241,131 @@
    "state": "CANCELLED by 3263",
    "start": "None",
    "gpu_hours": 0.0
+  },
+  {
+   "job": "5247835",
+   "name": "dreameng",
+   "elapsed": "00:01:49",
+   "state": "COMPLETED",
+   "start": "2026-10-17T20:55:35",
+   "gpu_hours": 0.03027777777777778
+  },
+  {
+   "job": "5247836",
+   "name": "dreamprg",
+   "elapsed": "00:04:06",
+   "state": "COMPLETED",
+   "start": "2026-10-17T21:02:21",
+   "gpu_hours": 0.06833333333333333
+  },
+  {
+   "job": "5247837",
+   "name": "dreameng",
+   "elapsed": "00:31:27",
+   "state": "COMPLETED",
+   "start": "2026-10-17T20:55:36",
+   "gpu_hours": 0.5241666666666667
+  },
+  {
+   "job": "5247838",
+   "name": "dreameng",
+   "elapsed": "00:29:22",
+   "state": "COMPLETED",
+   "start": "2026-10-17T20:57:32",
+   "gpu_hours": 0.48944444444444446
+  },
+  {
+   "job": "5247839",
+   "name": "dreameng",
+   "elapsed": "00:31:48",
+   "state": "COMPLETED",
+   "start": "2026-10-17T20:58:21",
+   "gpu_hours": 0.53
+  },
+  {
+   "job": "5247963",
+   "name": "dreameng",
+   "elapsed": "03:21:29",
+   "state": "COMPLETED",
+   "start": "2026-10-17T21:30:41",
+   "gpu_hours": 3.3580555555555556
+  },
+  {
+   "job": "5248069",
+   "name": "dreammil",
+   "elapsed": "00:11:30",
+   "state": "COMPLETED",
+   "start": "2026-10-17T21:53:22",
+   "gpu_hours": 0.19166666666666665
+  },
+  {
+   "job": "5248271",
+   "name": "dreammil",
+   "elapsed": "00:00:04",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T22:15:16",
+   "gpu_hours": 0.0011111111111111111
+  },
+  {
+   "job": "5248273",
+   "name": "dreammil",
+   "elapsed": "00:01:56",
+   "state": "COMPLETED",
+   "start": "2026-10-17T22:15:23",
+   "gpu_hours": 0.03222222222222222
+  },
+  {
+   "job": "5248371",
+   "name": "dreammil",
+   "elapsed": "00:01:43",
+   "state": "COMPLETED",
+   "start": "2026-10-17T22:45:35",
+   "gpu_hours": 0.02861111111111111
+  },
+  {
+   "job": "5248396",
+   "name": "dreammil",
+   "elapsed": "00:01:38",
+   "state": "COMPLETED",
+   "start": "2026-10-17T22:54:38",
+   "gpu_hours": 0.027222222222222224
+  },
+  {
+   "job": "5248477",
+   "name": "dreammil",
+   "elapsed": "00:01:40",
+   "state": "COMPLETED",
+   "start": "2026-10-17T23:21:25",
+   "gpu_hours": 0.027777777777777776
+  },
+  {
+   "job": "5248543",
+   "name": "dreammil",
+   "elapsed": "00:01:37",
+   "state": "COMPLETED",
+   "start": "2026-10-18T00:23:24",
+   "gpu_hours": 0.026944444444444444
+  },
+  {
+   "job": "5248723",
+   "name": "dreameval",
+   "elapsed": "00:06:42",
+   "state": "COMPLETED",
+   "start": "2026-10-18T00:50:16",
+   "gpu_hours": 0.11166666666666668
+  },
+  {
+   "job": "5248730",
+   "name": "dreammil",
+   "elapsed": "00:03:01",
+   "state": "COMPLETED",
+   "start": "2026-10-18T00:52:44",
+   "gpu_hours": 0.05027777777777778
   }
  ],
  "main_run": "full1",
  "main_steps": 150000,
  "main_gpu_hours": 3.345277777777778,
- "total_gpu_hours": 7.4175,
- "n_jobs": 30
+ "total_gpu_hours": 12.915277777777778,
+ "n_jobs": 45
 }

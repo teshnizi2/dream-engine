@@ -1,43 +1,64 @@
 # dream-engine: handoff note (STATE)
 
-Last updated: 2026-10-17 21:10 (v3 iteration in progress, see "v3 iteration" below; v2 is finished and tagged `v2-final`).
+Last updated: 2026-10-18 01:30 (v3 iteration finished: **v3 not adopted, v2 stays shipped**; see "v3 iteration" below. v2 is tagged `v2-final`).
 
-## v3 iteration (task: `BRIEF-v3.md`; pre-registration: `docs/PREREG-v3.md`)
-Goal: fix the flat-wall collapse of long dreams. Hypothesis: observability (a close-up wall says nothing about where you are).
-v2 is the fallback and stays reproducible (`git checkout v2-final`; `game/spec_v2.json` is byte-identical to its spec).
+## v3 iteration (task: `BRIEF-v3.md`; pre-registration: `docs/PREREG-v3.md`): a negative result
+Goal: fix the flat-wall collapse of long dreams. Hypothesis: observability (a close-up wall says nothing about where you are). Intervention: game v3
+(every wall face gets a unique low-frequency colour signature and one of four face shades) and a longer context (K = 8). Verdict by the pre-registered rule:
+**not adopted**. `full2` (v3, K = 4, 150k steps) against `full1` (v2) on the same 64 episodes x 512 frames: collapse rate 0.332 against 0.159 (rule: at most half; ratio 2.09,
+paired 95% interval 1.72 to 2.56) and median tracking horizon 19 against 20 frames (rule: not shorter). v2 is fallback and shipped, reproducible with `git checkout v2-final`
+(`game/spec_v2.json` is byte-identical to its spec). Nothing is deployed, pushed or posted.
 
 | Step | Status | Evidence |
 |---|---|---|
 | Tag `v2-final` on 43d7de4 | DONE | `git tag` |
-| Context length K as a parameter (train, eval, export, tests) and `--game` spec selection | DONE | `tests/test_context_length.py`; train.py `--num-ctx --game`; checkpoints record both |
+| Context length K as a parameter (train, eval, export, tests) and `--game` spec selection | DONE | `tests/test_context_length.py`; `train.py --num-ctx --game`; checkpoints record both |
 | Flat-wall metric + pre-registered evaluation | DONE | `model/flatwall.py`, `eval_prereg.py`, `tools/flatwall_justify.py`; constants justified on 32 v2 episodes (M4): `results/prereg_full1_m4_32ep.*`, `results/flatwall_justification_full1_m4_32ep.json` |
 | Game v3 (position tint + 4 face shades), Python/JS twins | DONE | `game/spec_v3.json`, `tests/test_game_v3.py`, parity 100.0000% / max diff 0 for v2 and v3 (`results/game_parity*.json`) |
-| Design evidence (no model) | DONE | `results/signature_design_v3.json`, `results/observability_v2_v3.json` |
-| `docs/PREREG-v3.md` committed before any v3 training | DONE (5b3f468, 20:54; two logged additions: fbb6155, a37d694) | `git log docs/PREREG-v3.md` |
-| ALICE smoke (v3, K = 8) | DONE: found and fixed the "final_ema.pt does not record the game" bug | job 5247835, RUNS.md row 13 |
-| ALICE: v2 baselines under the pre-registered protocol (64 episodes x 512 frames) | DONE | job 5247836, RUNS.md row 14, `results/prereg_w2_B.json`, `results/prereg_full1.json` |
-| ALICE: ablation (a) v2/K8 (5247837), (b) v3/K4 (5247838), (c) v3/K8 (5247839), 20k steps each | DONE: v3k4 selected by the pre-registered rule | RUNS.md row 15, `results/prereg_ablation.json` |
-| Full run of the selected variant (`full2` = v3 game, K = 4, 150k steps, jobs 5247963 + chained 5247964) | running (started 21:30, ~3.3 h) | `logs/dreameng-5247963.out` on ALICE |
-| Adoption rule on `full2` vs `full1` (collapse <= half, horizon not shorter) | pending | |
+| Design evidence (no trained model) | DONE | `results/signature_design_v3.json`, `results/observability_v2_v3.json` (flat-wall views localise the player within 1.5 cells 46% of the time in v2, 91% in v3) |
+| `docs/PREREG-v3.md` committed before any v3 training | DONE (5b3f468; six logged entries in section 8) | `git log docs/PREREG-v3.md` |
+| ALICE smoke (v3, K = 8) | DONE (found and fixed: `final_ema.pt` did not record the game) | job 5247835, RUNS.md row 13 |
+| v2 baselines under the pre-registered protocol | DONE | job 5247836, rows 14, `results/prereg_w2_B.json`, `results/prereg_full1.json` |
+| 20k-step ablation: (a) v2 K = 8, (b) v3 K = 4, (c) v3 K = 8, and the selection rule | DONE: v3k4 selected | jobs 5247837-39, row 15, `results/prereg_ablation.json` |
+| Full run `full2` (v3, K = 4, 150k steps) and the adoption rule | DONE: not adopted | job 5247963, rows 18-19, `results/prereg_final_full2_vs_full1.json` |
+| Exploratory: milestone learning curves, flat-spell statistics, flat-wall escape, signature reliance | DONE | rows 16-17, 20, `results/flat_spells.json`, `results/signature_use_*.json`, `media/collapse_curve.png` |
+| Standard `eval.py` + probe of `full2` | DONE (not used for any decision) | job 5248723, row 21 |
+| Site and tools take K from the model meta (tested with a random K = 8 model) | DONE | `tools/site_smoke.mjs --root <dir>`: 16/16 for K = 4 and K = 8 |
 
-20k-step ablation (64 episodes x 512 frames; collapse rate = stuck on a flat wall for 32 frames while the real frame is not; baseline `w2_B` = v2, K = 4):
-median tracking horizon / collapse rate: baseline 14.0 / 0.667; (a) v2 K = 8: 13.5 / 0.670 (ratio 1.00, paired interval 0.93 to 1.09: a longer context alone does nothing);
-(b) v3 K = 4: 15.5 / 0.542 (ratio 0.81, 0.72 to 0.90); (c) v3 K = 8: 13.0 / 0.498 (ratio 0.75, 0.65 to 0.85). The v3 game helps, by 19 to 25%, not by half; only (b) had a median
-horizon at least the baseline's, so the rule picked it. Exploratory: the chance that a dream leaves a flat wall in a given frame is 0.5% (baseline), 1.0% (v3), 3.3% (`full1`, 150k steps), 6.3% (the real game): `results/flat_spells.json`.
-| Site and tools take K from the model meta (tested with a random K = 8 model) | DONE | `tools/site_smoke.mjs --root <dir>`, 15/15 for K = 4 and K = 8 |
+Pre-registered numbers (64 episodes x 512 frames, wake-up at real frame 8, Euler 2 steps, unit start, context noise 0.05; PSNR levels are not comparable across the two games):
+| | `full1` (v2) | `full2` (v3) |
+|---|---|---|
+| collapse rate (stuck on a flat wall for 32 frames while the real frame is not, frames 64-512) | 0.159 (0.128 to 0.199) | 0.332 (0.274 to 0.395) |
+| median tracking horizon, frames until the 5-frame mean PSNR < 20 dB (middle half) | 20 (10.5 to 33) | 19 (10.8 to 38) |
+| 360 degree spin return PSNR | 15.0 dB | 15.5 dB |
+| one step ahead (copy-last) | 34.1 dB (24.2) | 34.4 dB (24.7) |
+Single-frame collapse 0.346 / 0.429, window-64 collapse 0.062 / 0.238, flat-wall share of dream frames 0.49 / 0.60 (the real game: 0.25).
+
+20k-step ablation (baseline `w2_B` = v2, K = 4; median horizon / collapse rate): baseline 14.0 / 0.667; (a) v2 K = 8: 13.5 / 0.670 (a longer context alone does nothing);
+(b) v3 K = 4: 15.5 / 0.542 (ratio 0.81); (c) v3 K = 8: 13.0 / 0.498 (ratio 0.75); only (b) had a median horizon at least the baseline's, so the rule picked it.
+
+Exploratory (declared in the PREREG log before the results they describe): the collapse is a failure to leave: per flat frame the dream leaves a flat wall with probability 0.5% (`w2_B`),
+3.3% (`full1`), 2.0% (`full2`), the real game 6.3%. The collapse rate falls with training in v2 (0.60 at 20k to 0.16 at 150k); v3 follows it to 60k steps and then stalls near 0.33,
+while its tracking horizon is at least v2's at 6 of 7 milestones. The v3 model does read the signature (shifting it costs 0.13 dB in the escape test at 20k steps and 0.85 dB at 150k) and
+still collapses. Collapsed frames are smooth colour fields (per-frame colour std about 6 grey levels against about 21 for a real wall close-up).
 
 Decisions (v3):
-* **D12. The collapse metric has a persistence window.** The real game is flat-wall (no floor/ceiling visible) in 23% of its frames, so the
-  brief's single-frame definition has a floor of 0.175 for a perfectly calibrated but untracked dream against v2's 0.375 and could never be
-  halved. "Stuck on a flat wall" = the last 32 frames all flat; window, tolerance and threshold justified on v2 in the PREREG (section 4);
+* **D12. The collapse metric has a persistence window.** The real game is flat-wall (no floor/ceiling visible) in 23% of its frames, so the brief's single-frame definition has a floor of 0.175
+  for a perfectly calibrated but untracked dream against v2's 0.375 and could never be halved. "Stuck on a flat wall" = the last 32 frames all flat; window, tolerance and threshold justified on v2 (PREREG section 4);
   the single-frame rate is reported too.
-* **D13. Every model wakes up at real frame 8** (K = 8 needs 8 real frames), always on the first n of 64 fixed trajectories, so v2 and v3 see
-  the same paths and K = 4 / K = 8 models are scored on the same frames.
-* **D14. v3 tint:** three smooth waves of the hit position, one per colour channel (amplitude 12 grey levels, periods >= 5 cells), found by a
-  seeded search for maximal separation of the 142 visible wall faces; faces shaded W 1.00 / E 0.90 / N 0.78 / S 0.66; the pillar keeps its look.
-  Chosen on a model-free proxy (nearest-neighbour pose recovery from flat-wall frames: within 1.5 cells 46% -> 91%), not on any trained model.
-* **D15. Larger collision radius: not done** (it cannot stop the wall filling the view; it would change the dynamics so v2 and v3 episodes
-  would differ).
+* **D13. Every model wakes up at real frame 8** (K = 8 needs 8 real frames), always on the first n of 64 fixed trajectories, so v2 and v3 see the same paths and K = 4 / K = 8 models are scored on the same frames.
+* **D14. v3 tint:** three smooth waves of the hit position, one per colour channel (amplitude 12 grey levels, periods >= 5 cells), found by a seeded search for maximal separation of the 142 visible wall faces;
+  faces shaded W 1.00 / E 0.90 / N 0.78 / S 0.66; the pillar keeps its colour. Chosen on a model-free proxy, not on any trained model.
+* **D15. Larger collision radius: not done** (it cannot stop the wall filling the view; it would change the dynamics so v2 and v3 episodes would differ).
+* **D16. v3 is not adopted** because the pre-registered rule says so; v3 code, game, tools and results stay in the repo (`game/spec_v3.json`, `eval_prereg.py`, ...). `game/spec.json` is still v2 (`game/make_spec.py: SHIPPED = 2`).
+* **D17. What the result does not show:** every row is one training run; the paired intervals cover the sampling of episodes, not the variation between training runs, and the sign of the v3 effect changed between 20k (ratio 0.81)
+  and 150k steps (2.09). It does not show that v3 causes more collapse, nor that no other signature design would help.
+
+Open for Reza (v3):
+* Whether to spend compute on seeds: three seeds each of v2 and v3 (about 3.4 GPU-hours per run, about 20 GPU-hours) would measure the run-to-run variation of the collapse rate, the biggest unknown behind D17.
+* The video still re-seeds the dream every 1.25 s and says so; the live demo is pure imagination until "Wake up". A collapse guard remains your call (see below).
+* Ideas not tried (the brief allowed one bounded iteration): training on the model's own long rollouts, an objective that penalises staying on a flat wall, an explicit map or longer-than-8 memory.
+* The site now reads the context length from the model meta, so a K = 8 model could be dropped in (tested with a random-weights model, 16/16 smoke checks).
 
 ## Goal
 A small action-conditioned diffusion world model (DIAMOND-style EDM U-Net) trained on a first-person raycaster maze.

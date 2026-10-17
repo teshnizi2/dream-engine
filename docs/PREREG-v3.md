@@ -201,3 +201,7 @@ No change to a metric, constant, rule or protocol so far. Infrastructure fixes, 
    and v3): an exploratory probe `tools/signature_use.py` was added. It runs the flat-wall escape diagnostic in the v3 game and in a copy whose tint
    phases are shifted (a different position code on the same geometry), each scored against its own game's real frames; the PSNR drop measures how
    much a model relies on the signature. It is applied to `v3k4` and `full2` only, plays no part in any rule, and is reported as exploratory.
+6. 2026-10-18 (outcome, no change to any rule): the selection rule picked `v3k4` (RUNS.md row 15); `full2` was trained (row 18) and the adoption rule was
+   applied by `tools/compare_prereg.py` exactly as written in section 6: collapse rate 0.332 against 0.159 (rule A not met) and median horizon 19 against 20
+   frames (rule B not met). v3 is not adopted; v2 stays shipped. All numbers are in `results/prereg_*.json`, `results/prereg_ablation.json` and
+   `results/prereg_final_full2_vs_full1.json`, and the README's v3 section reports them together with the exploratory results listed above.
