@@ -1,79 +1,75 @@
 # dream-engine: handoff note (STATE)
 
-Last updated: 2026-10-17 (resumed after the first Claude Code process exited mid-benchmark).
+Last updated: 2026-10-17 16:30 (main ALICE run still training; see "Next steps").
 
 ## Goal
-A small action-conditioned diffusion world model (DIAMOND-style EDM U-Net) trained on a first-person
-raycaster maze. In the browser (onnxruntime-web, WebGPU) next to the real game: REAL vs DREAM, same
-keypresses. Spec: `BRIEF.md`. Shared rules: `../visual-series-RULES.md` (re-read it: the ALICE rule changed).
+A small action-conditioned diffusion world model (DIAMOND-style EDM U-Net) trained on a first-person raycaster maze.
+In the browser (onnxruntime-web, WebGPU) next to the real game: REAL vs DREAM, same keypresses. Spec: `BRIEF.md`.
+Shared rules: `../visual-series-RULES.md` (ALICE is approved for this project's training, one row per experiment in `RUNS.md`).
 
 ## Status (verified = produced by a run, saved in `results/`)
 | Piece | Status | Evidence |
 |---|---|---|
-| Game twins (Py `game/raycaster.py`, JS `game/raycaster.mjs`, shared `game/spec.json`) | DONE | `results/game_parity.json`: 100.0000% identical pixels, max abs diff 0, state diff 0 after 100 steps |
-| Data (`data/policy.py`, `data/loader.py`, `data/coverage.py`) | DONE | `results/data_throughput.json`, `results/coverage.json|png` (entropy 0.995) |
-| Model (`model/*`), `train.py` (resumable, EMA, bf16, `--unroll`), `eval.py`, `export.py` | DONE, tested | `pytest tests/` (60+ tests), `node --test tests/*.test.mjs` |
-| Local MPS smoke run | DONE (it stopped at step ~290: GPU shared, 0.3 it/s) | `results/local_mps_smoke_metrics.jsonl`; loss 1.10 -> 0.22 |
-| ALICE smoke job 5246018 | DONE | RUNS.md row 1: 3000 steps in 4.75 min, 12.2 it/s on one A100, 1-step PSNR 24.9 vs 22.4 copy-last |
-| ONNX export (opset 17, static, fp32+fp16) | DONE | `results/onnx_export_dream.json`; ONNX vs PyTorch: fp32 1e-6, fp16 7e-3 (browser WebGPU, `tools/selftest.html`) |
-| Browser demo `site/` | WORKS with the smoke model | in-browser 1-step PSNR matches Python on the same windows (25.38 vs 25.25-25.32 dB); 3 steps: ~24 fps, 2 steps ~29, 1 step 30 (capped) on a shared GPU |
-| ALICE ablations (wave 1: 4 jobs, 20k steps) | RUNNING: 5246079 abl_B, 5246080 abl_B_noctx, 5246081 abl_A, 5246082 abl_Bd1 | results/eval_abl_*.json on the cluster (`~/dream-engine/results`) |
-| Full ALICE run, final eval, media, README/POST | TODO | |
-
-### Browser findings worth remembering
-- WebGPU NHWC conv gives WRONG results for 15 input channels: the exporter pads conv_in to 16 channels (`PaddedConv`). Without it the dream is noise.
-- Graph capture (`enableGraphCapture` + GPU-buffer IO binding) cuts a forward pass from ~25 ms to ~15 ms; compute (conv throughput ~0.4 TFLOPS under contention) is then the floor.
-- A Split with many outputs fails on WebGPU (storage-buffer limit), so modulation Gemms are not fused.
-- The GPU is shared with other builders (often 60-99% busy): every fps number must be reported with that caveat (`tools/browser_fps.mjs` records the utilisation).
+| Game twins (Py `game/raycaster.py`, JS `game/raycaster.mjs`, shared `game/spec.json`) | DONE | `results/game_parity.json`: 100.0000% identical pixels, max abs diff 0, state diff 0 after 100 steps (re-run after the texture redesign) |
+| Data (`data/`) | DONE | `results/data_throughput.json`, `results/coverage.json|png` (entropy 0.995) |
+| Model, `train.py` (resumable, EMA, bf16, unroll / blur / rollout-context options), `eval.py`, `export.py` | DONE, tested | `pytest tests` 75 passed, `node --test tests/*.test.mjs` 8 passed, `node tools/site_smoke.mjs` 14/14 |
+| Local MPS smoke run | DONE (stopped at step ~290: shared GPU, 0.3 it/s) | `results/local_mps_smoke_metrics.jsonl` |
+| ALICE smoke job 5246018 | DONE | RUNS.md row 1 |
+| Browser demo `site/` | WORKS with the w2_B (20k steps) model on the new game; final model pending | `tools/site_smoke.mjs`; ONNX in browser vs PyTorch: fp32 1.3e-6, fp16 1.3e-2 (`results/onnx_browser_verification.json`) |
+| Main ALICE run `full1` (150k steps, B arch, game v2) | RUNNING: Slurm 5246233 (+ chained no-op 5246234), ~12.6 it/s, ends ~18:30 | `~/dream-engine/runs/full1` on ALICE |
+| Final eval, probe, export, fps, video, hero, drift figure, README, POST | TODO after full1 | `alice/eval.slurm`, `tools/*`, `tools/fill_readme.py` |
 
 ## Decisions (change only with a reason written here)
-1. **Action space is factorised** instead of "6 discrete": (move: none/fwd/back) x (strafe: none/left/right) x
-   (turn: none/left/right) = 27 combos, fed to the model as one-hot 3+3+3 (= sum of three embeddings).
-   Reason: smooth controls (hold W and A/D for arcs); Q/E strafe is kept only if its rollouts are as good as
-   the others (check per-action PSNR; otherwise hide Q/E in the UI and say so in the README).
-2. **No dataset on disk.** The Mac has ~9.6 GB free (96% full), 1M frames would be 12 GB. Trajectories are
-   generated on the fly (`data.loader.BatchStream`, ~1.6k frames/s per process).
-3. **Bit-exact JS/Python twins**: the simulation uses only + - * / floor abs sqrt on float64 and a unit-vector
-   heading rotated by a precomputed (cos, sin); no libm trig in the loop. Result: max abs diff 0.
-4. **Map**: 16x16, 119 open cells, regions coloured by wall type (blue west wall of the hall with a doorway,
-   amber pillar at (7,7), window gallery along the north wall, red-brick east room, green west wing, purple SW,
-   ochre SE). Start pose: west corridor looking east through the doorway at the pillar.
-5. **Physics**: move 0.12 tile/step, strafe 0.10, turn 5 deg/step, collision radius 0.22 with sliding,
-   plane 0.8 (FOV 77 deg), fog f = 1/(1+(0.16 d)^2). Turn first, then move along the new heading.
-6. **Model recipe** (read `vendor/diamond`, MIT): EDM preconditioning sigma_data 0.5, offset noise 0.3, training
-   sigma lognormal(-0.4, 1.2) clipped to [2e-3, 20], DIAMOND U-Net (depths 2 per level, mid-block attention at 8x8,
-   AdaGroupNorm, cond 256), K = 4 context frames by channel concat. Added: context-noise augmentation
-   (sigma_c ~ U(0, 0.5) w.p. 0.9, embedded by an MLP). Sampler: Euler (DIAMOND) or Heun, sigma_min 2e-3,
-   sigma_max 5, rho 7. Default init sigma_max*N(0,I) (Karras); DIAMOND's code starts from N(0,I): pick by validation.
-7. **Candidate sizes** (measured with `scratchpad` bench): DIAMOND-size (64,64,64,64): 4.47M params, 3.04 GMACs
-   per forward; (32,64,96,128): 6.77M params, 1.49 GMACs. All widths must be multiples of 32 (GroupNorm groups).
-8. **ONNX**: legacy exporter at opset 17 so GroupNorm lowers to InstanceNormalization (the WebGPU EP has no
-   GroupNormalization). onnxruntime-web pinned to 1.30.0 (published 2026-09-14, > 2 weeks old).
+1. **Action space is factorised** (move x strafe x turn = 27 combos, one-hot 3+3+3) instead of "6 discrete": hold W + A/D for arcs.
+   Strafe works (hold-key test beats freezing) but is the weakest action (rarest in the data).
+2. **No dataset on disk** (Mac has ~10 GB free): trajectories are generated on the fly.
+3. **Bit-exact JS/Python twins**: no libm trig in the simulation loop; heading is a unit vector rotated by a precomputed (cos, sin).
+4. **Game v2 (commit 17cf67f): learnable textures.** Wave 1 (game v1, fine textures) saturated at ~28 dB 1-step for every
+   architecture. Error attribution: window-stripe pixels were 5% of the pixels and 65% of the squared error. Textures are now
+   distance pre-filtered ("mip" 2..7 cells fades them to their mean colour), window panes are 3 per face, fewer thin lines.
+   Same recipe, 20k steps: 27.9 -> 30.7 dB. Window panes are still 5% of pixels and 37% of the error.
+5. **Model**: DIAMOND U-Net, widths 32-64-96-128, 2 res blocks per level, mid-block attention, cond 256, K = 4 frames, EDM
+   (sigma_data 0.5, offset noise 0.3, lognormal(-0.4, 1.2)), context-noise augmentation sigma_c ~ U(0, 0.5) p 0.9. 6.77M params.
+   Width/depth did not matter at 20k steps (A 64x4: 28.0, B: 27.9, depth-1: 27.7, no context noise: 27.7 dB on game v1).
+6. **Sampler**: Euler only. Heun with 2 or 3 steps diverges on this schedule (5 / 13 dB). 1 step is as good as 3 (30.7 vs 30.0 dB)
+   and 3x faster; `unit` init (N(0,1) like the DIAMOND code) beats Karras init by +1.3 dB at 3 steps. Demo defaults are
+   written into `site/models/dream_meta.json` by `export.py --ctx-sigma --init --default-steps`.
+7. **Drift stabilisers tested as 4k-step fine-tunes of w2_B** (RUNS.md): plain control, DIAMOND-style unroll 3, context blur,
+   rollout-context (scheduled sampling, p 0.5). None improved the tracking horizon (mean PSNR over 32 frames 20.2-20.4 dB for the
+   first three, 18.6 for rollout-context); blur reduced collapse onto flat wall close-ups (nearest-real-frame PSNR 27.5 vs 30.1,
+   real 24.2); rollout-context sharpened late frames but made them blobby and cost 3 dB. Run-to-run noise is ~0.4 dB.
+   Plan: after full1, one optional blur fine-tune; pick by tracking + validity; otherwise ship full1 as is.
+8. **Honest picture of the dream**: it follows the real game for ~8-16 frames, then dreams a different but game-like place; late
+   frames get smoother. PSNR vs the real game is meaningless after divergence, so `eval.py` also reports the nearest-real-frame
+   validity, sharpness and tracking-horizon numbers. The demo has a manual "Wake up", an optional "Auto wake-up" (every 2 s) and
+   marks wake-ups on the drift chart. The video re-seeds every 2 s and says so in a caption.
+9. **ONNX / browser**: legacy exporter at opset 17 (GroupNorm -> InstanceNorm), conv_in padded 15 -> 16 channels (WebGPU NHWC conv
+   is wrong for 15 input channels), SiLU fused to QuickGelu, ORT basic optimisation. WebGPU graph capture + fp16: 13.8 MB model.
+   onnxruntime-web pinned 1.30.0 from jsDelivr. WASM fallback runs in a worker (`proxy`), inputs copied.
 
-## Machine notes
-- Apple M4 MPS is slow and shared: DIAMOND-size train step at B=32 takes ~1.7 s (about 0.35 TFLOPS effective;
-  other builders keep the GPU 20-60% busy). A benchmark at B=64 was killed (exit 137, likely memory). Keep local
-  batches <= 32 and run only one heavy job at a time.
-- Disk: ~9.6 GB free. Keep checkpoints small (~50 MB each), media modest.
+## Machine / cluster notes
+- Apple M4: GPU shared with the other builders (often 60-99% busy, one other builder runs pytest on it): every fps number must carry
+  that caveat (`tools/browser_fps.mjs` records `ioreg` utilisation). Local MPS training is ~100x slower than one A100.
+- ALICE: Slurm account shared with the reasoning-fractals builder (never cancel `rf-*`); per-user GPU quota makes extra jobs wait
+  (`QOSMaxGRESPerUser`). `~/dream-engine` holds code, env, runs, logs, results. `alice/README.md` has commands + cost table.
+- Disk: ~10 GB free locally; `runs/` and `tools/bench_models/` are gitignored scratch.
 
 ## Open for Reza
-- ALICE budget: approved for the long dream-engine run (his words, relayed by the coordinator: "Yes, you can submit
-  the long ALICE runs for the dream-engine training and the high-res fractal renders."). Default taken: one short
-  smoke job, then one resumable run of chained 4 h jobs on `gpu-short` / `a100:1` with a hard cap on total hours
-  (see `alice/`); GPU-hours used will be reported.
-- Strafe (Q/E): kept in the action space by default; hidden in the UI if it hurts quality (see decision 1).
-
-## ALICE log (Slurm account shared with the reasoning-fractals builder: never cancel `rf-*` jobs)
-- 5246018 smoke (SMOKE). 5246058-61 cancelled (comma bug). 5246079/80/81/82 wave 1 (game v1, fine textures): all variants 27.7-28.0 dB 1-step.
-- Root cause of the ~28 dB ceiling: window-stripe pixels = 5% of pixels, 65% of the squared error -> game textures redesigned (commit 17cf67f, distance pre-filtered "mip", wide panes, fewer lines).
-- Game v2 (current): 5246231 w2_B (20k steps): 1-step 30.7 dB / SSIM 0.896 vs copy-last 23.9 (results/ablation/eval_w2_B.json). 5246233(+5246234 no-op chain) **full1: 150k steps, B arch, the main run**, ~12.6 it/s, started 15:13, ends ~18:30.
-- Wave 3 (fine-tunes of w2_B, 4k steps, lr 1e-4): 5246377 unroll=3, 5246378 plain control, 5246397 context blur 0.5/2.0. Question: do own-frame context (unroll) or blur augmentation reduce drift?
-- Probe 5246379 (w2_B, 12 sampler settings): all within noise (mean PSNR first 32 frames 20-21.7 dB); 1-step is as good as 3 and 3x faster; 'unit' init is +1.3 dB at 3 steps one-step-wise. Heun with 2 or 3 steps diverges (5 / 13 dB) -> Euler only.
-- Rollouts: dream follows the real game for ~8-16 frames (PSNR 21.7 at 8, 18.4 at 16), then wanders to a different but valid-looking place (PSNR ~ unrelated-frame floor 12 dB by 128); late frames get smoother (sharpness ratio 0.3-0.5 of the real frames) and drift toward simple wall close-ups (nearest-real-frame PSNR 31-37 dB vs 24 for real frames).
+- **Licence** of this repo's own code is not chosen (README says so; DIAMOND's MIT notice is in `THIRD_PARTY.md`).
+- **Nothing is deployed or posted.** To publish, `site/` is a static folder (needs the `site/models/*.onnx` files, which are
+  gitignored until the final export is committed with `git add -f`).
+- The page loads onnxruntime-web (28 MB wasm) from jsDelivr and fonts from Google Fonts; self-hosting them is a privacy/offline
+  choice for Reza. First load downloads ~42 MB (runtime + model).
+- Auto wake-up default is OFF (pure imagination); the video uses re-seeding every 2 s and says so. His call if the post should show
+  the raw drift instead.
 
 ## Next steps
-1. `git commit` this milestone. Write `train.py`; local MPS smoke run (loss falls, samples look like corridors).
-2. `export.py` + ONNX-vs-PyTorch check; browser benchmark of the architecture (random weights are enough for speed).
-3. `alice/setup.sh`, `alice/train.slurm`; smoke job on ALICE, then the full chained run; `RUNS.md` row per experiment.
-4. Browser demo with the smoke checkpoint while ALICE trains (invoke `frontend-design` first), then swap in the best model.
-5. Eval + media (`media/dream-1080x1350.mp4`, `hero.png`, `drift.png`), README, POST, `verification-before-completion`.
+1. When `full1` ends (Slurm 5246233): `rsync alice2:dream-engine/runs/full1/final_ema.pt runs/full1_final_ema.pt`; submit
+   `alice/eval.slurm` (RUN=full1) and optionally a blur fine-tune (`INIT_FROM=runs/full1/final_ema.pt BLUR_PROB=0.5 BLUR_MAX=2.0`).
+2. Choose defaults from `results/probe_*.json`; `python export.py --ckpt ... --out site/models --name dream --fp16 --verify ...`;
+   `python tools/make_eval_summary.py`; `node tools/verify_onnx_browser.mjs`; `node tools/capture_eval.mjs --windows ...` (browser vs
+   Python on identical windows); `node tools/browser_fps.mjs --out results/browser_fps.json` on the quietest GPU moment.
+3. `node tools/capture_video.mjs --out media/dream-1080x1350.mp4 --wake-every 48 ...` (+ `--square 1` for 1080x1080), hero still,
+   `media/drift.png` from the ALICE eval.
+4. `python tools/training_summary.py ...`, RUNS.md rows (waves 2 and 3, main run, final eval), `python tools/fill_readme.py ...`,
+   POST.md, full test run, `git add -f site/models/dream_*.onnx`, commit.

@@ -1,0 +1,195 @@
+{
+ "script": "tools/training_summary.py --since 2026-10-17 --main full1 --main-steps 150000 --main-jobs 5246233",
+ "gpu": "NVIDIA A100 80GB PCIe, one per job",
+ "jobs": [
+  {
+   "job": "5246018",
+   "name": "dreameng",
+   "elapsed": "00:04:45",
+   "state": "COMPLETED",
+   "start": "2026-10-17T14:05:25",
+   "gpu_hours": 0.07916666666666666
+  },
+  {
+   "job": "5246058",
+   "name": "dreameng",
+   "elapsed": "00:00:09",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T14:20:20",
+   "gpu_hours": 0.0025
+  },
+  {
+   "job": "5246059",
+   "name": "dreameng",
+   "elapsed": "00:00:08",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T14:20:21",
+   "gpu_hours": 0.0022222222222222222
+  },
+  {
+   "job": "5246060",
+   "name": "dreameng",
+   "elapsed": "00:00:08",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T14:20:21",
+   "gpu_hours": 0.0022222222222222222
+  },
+  {
+   "job": "5246061",
+   "name": "dreameng",
+   "elapsed": "00:00:00",
+   "state": "CANCELLED by 3263",
+   "start": "None",
+   "gpu_hours": 0.0
+  },
+  {
+   "job": "5246079",
+   "name": "dreameng",
+   "elapsed": "00:27:55",
+   "state": "COMPLETED",
+   "start": "2026-10-17T14:20:47",
+   "gpu_hours": 0.4652777777777778
+  },
+  {
+   "job": "5246080",
+   "name": "dreameng",
+   "elapsed": "00:27:59",
+   "state": "COMPLETED",
+   "start": "2026-10-17T14:20:47",
+   "gpu_hours": 0.4663888888888889
+  },
+  {
+   "job": "5246081",
+   "name": "dreameng",
+   "elapsed": "00:37:52",
+   "state": "COMPLETED",
+   "start": "2026-10-17T14:20:47",
+   "gpu_hours": 0.6311111111111112
+  },
+  {
+   "job": "5246082",
+   "name": "dreameng",
+   "elapsed": "00:19:08",
+   "state": "COMPLETED",
+   "start": "2026-10-17T14:34:33",
+   "gpu_hours": 0.3188888888888889
+  },
+  {
+   "job": "5246215",
+   "name": "dreamprb",
+   "elapsed": "00:00:00",
+   "state": "CANCELLED by 3263",
+   "start": "None",
+   "gpu_hours": 0.0
+  },
+  {
+   "job": "5246216",
+   "name": "dreamprb",
+   "elapsed": "00:00:00",
+   "state": "CANCELLED by 3263",
+   "start": "None",
+   "gpu_hours": 0.0
+  },
+  {
+   "job": "5246231",
+   "name": "dreameng",
+   "elapsed": "00:27:42",
+   "state": "COMPLETED",
+   "start": "2026-10-17T15:13:32",
+   "gpu_hours": 0.46166666666666667
+  },
+  {
+   "job": "5246232",
+   "name": "dreameng",
+   "elapsed": "00:31:42",
+   "state": "COMPLETED",
+   "start": "2026-10-17T15:13:32",
+   "gpu_hours": 0.5283333333333334
+  },
+  {
+   "job": "5246233",
+   "name": "dreameng",
+   "elapsed": "00:46:53",
+   "state": "RUNNING",
+   "start": "2026-10-17T15:13:32",
+   "gpu_hours": 0.7813888888888889
+  },
+  {
+   "job": "5246367",
+   "name": "dreameng",
+   "elapsed": "00:00:08",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T15:40:04",
+   "gpu_hours": 0.0022222222222222222
+  },
+  {
+   "job": "5246368",
+   "name": "dreameng",
+   "elapsed": "00:00:07",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T15:40:05",
+   "gpu_hours": 0.0019444444444444444
+  },
+  {
+   "job": "5246377",
+   "name": "dreameng",
+   "elapsed": "00:16:30",
+   "state": "COMPLETED",
+   "start": "2026-10-17T15:40:15",
+   "gpu_hours": 0.275
+  },
+  {
+   "job": "5246378",
+   "name": "dreameng",
+   "elapsed": "00:06:58",
+   "state": "COMPLETED",
+   "start": "2026-10-17T15:40:15",
+   "gpu_hours": 0.11611111111111111
+  },
+  {
+   "job": "5246379",
+   "name": "dreamprb",
+   "elapsed": "00:02:42",
+   "state": "COMPLETED",
+   "start": "2026-10-17T15:41:32",
+   "gpu_hours": 0.045
+  },
+  {
+   "job": "5246395",
+   "name": "dreameng",
+   "elapsed": "00:00:07",
+   "state": "CANCELLED by 3263",
+   "start": "2026-10-17T15:44:21",
+   "gpu_hours": 0.0019444444444444444
+  },
+  {
+   "job": "5246397",
+   "name": "dreameng",
+   "elapsed": "00:06:54",
+   "state": "COMPLETED",
+   "start": "2026-10-17T15:44:31",
+   "gpu_hours": 0.115
+  },
+  {
+   "job": "5246407",
+   "name": "dreamprb",
+   "elapsed": "00:00:00",
+   "state": "CANCELLED by 3263",
+   "start": "None",
+   "gpu_hours": 0.0
+  },
+  {
+   "job": "5246423",
+   "name": "dreameng",
+   "elapsed": "00:03:15",
+   "state": "RUNNING",
+   "start": "2026-10-17T15:57:10",
+   "gpu_hours": 0.05416666666666667
+  }
+ ],
+ "main_run": "full1",
+ "main_steps": 150000,
+ "main_gpu_hours": 0.7813888888888889,
+ "total_gpu_hours": 4.350555555555556,
+ "n_jobs": 23
+}
