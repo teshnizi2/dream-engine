@@ -108,7 +108,7 @@ report the PSNR between the start view and the dream's frame 72 (the real game r
 window), mean PSNR over the first 32 dreamed frames, PSNR curve at frames 1, 4, 8, 16, 32, 64, 128, 256, 512, the copy-last-frame
 baseline and the unrelated-frame floor for each game.
 
-**Exploratory, not decisive: flat-wall escape** (added 2026-10-17 21:20, before any v3 evaluation existed). 64 random poses facing a wall closely
+**Exploratory, not decisive: flat-wall escape** (added 2026-10-17 21:17, commit ce968b5, before any v3 evaluation existed). 64 random poses facing a wall closely
 (a flat-wall frame, chosen by the same flat-wall test), K identical frames of context, then "turn right" held for 24 frames (120 degrees):
 the real game turns away from the wall and shows what is around the corner. Reported for every run: the dream's PSNR against the real game
 at frames 4, 8, 16 and 24 next to the freeze baseline, and the share of dreams still on a flat wall at frame 24 next to the real game's. It
@@ -171,12 +171,12 @@ evidence.
 
 No change to a metric, constant, rule or protocol so far. Infrastructure fixes, listed so that nothing is silent:
 
-1. 2026-10-17 21:03 (commit 0391897), before any evaluation of a v3 run had run: the smoke job (300 steps, v3 game, K = 8; its numbers
+1. 2026-10-17 21:06 (commit 0391897), before any evaluation of a v3 run had run: the smoke job (300 steps, v3 game, K = 8; its numbers
    are not used for anything) showed that `final_ema.pt` did not record which game the model was trained on, so `eval_prereg.py` would have
    evaluated a v3 model on the v2 game. `train.py` now writes the training args into `final_ema.pt`, `export.ckpt_game` falls back to the
    `ckpt_last.pt` next to it for runs that started earlier (the ablation runs (b) and (c) had started), and the job script passes `--game`
    explicitly. Every evaluation json records the game it used.
-2. 2026-10-17 21:20 (commit below), before the evaluation of any v3 run had started: the exploratory flat-wall escape diagnostic was added
+2. 2026-10-17 21:17 (commit ce968b5), before the evaluation of any v3 run had started: the exploratory flat-wall escape diagnostic was added
    to `eval_prereg.py` (section 4); the in-job evaluations of the three ablation runs include it. The two v2 baselines (`w2_B`, `full1`)
    were evaluated before it existed; their diagnostic is added afterwards to the same json with `--only-flat-escape` (the pre-registered
    numbers in those files are untouched).
