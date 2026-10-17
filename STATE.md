@@ -16,8 +16,14 @@ v2 is the fallback and stays reproducible (`git checkout v2-final`; `game/spec_v
 | `docs/PREREG-v3.md` committed before any v3 training | DONE (5b3f468, 20:54; two logged additions: fbb6155, a37d694) | `git log docs/PREREG-v3.md` |
 | ALICE smoke (v3, K = 8) | DONE: found and fixed the "final_ema.pt does not record the game" bug | job 5247835, RUNS.md row 13 |
 | ALICE: v2 baselines under the pre-registered protocol (64 episodes x 512 frames) | DONE | job 5247836, RUNS.md row 14, `results/prereg_w2_B.json`, `results/prereg_full1.json` |
-| ALICE: ablation (a) v2/K8 (5247837), (b) v3/K4 (5247838), (c) v3/K8 (5247839), 20k steps each | running | RUNS.md (row to be added) |
-| Full run of the selected variant (`full2`), adoption rule | not started | |
+| ALICE: ablation (a) v2/K8 (5247837), (b) v3/K4 (5247838), (c) v3/K8 (5247839), 20k steps each | DONE: v3k4 selected by the pre-registered rule | RUNS.md row 15, `results/prereg_ablation.json` |
+| Full run of the selected variant (`full2` = v3 game, K = 4, 150k steps, jobs 5247963 + chained 5247964) | running (started 21:30, ~3.3 h) | `logs/dreameng-5247963.out` on ALICE |
+| Adoption rule on `full2` vs `full1` (collapse <= half, horizon not shorter) | pending | |
+
+20k-step ablation (64 episodes x 512 frames; collapse rate = stuck on a flat wall for 32 frames while the real frame is not; baseline `w2_B` = v2, K = 4):
+median tracking horizon / collapse rate: baseline 14.0 / 0.667; (a) v2 K = 8: 13.5 / 0.670 (ratio 1.00, paired interval 0.93 to 1.09: a longer context alone does nothing);
+(b) v3 K = 4: 15.5 / 0.542 (ratio 0.81, 0.72 to 0.90); (c) v3 K = 8: 13.0 / 0.498 (ratio 0.75, 0.65 to 0.85). The v3 game helps, by 19 to 25%, not by half; only (b) had a median
+horizon at least the baseline's, so the rule picked it. Exploratory: the chance that a dream leaves a flat wall in a given frame is 0.5% (baseline), 1.0% (v3), 3.3% (`full1`, 150k steps), 6.3% (the real game): `results/flat_spells.json`.
 | Site and tools take K from the model meta (tested with a random K = 8 model) | DONE | `tools/site_smoke.mjs --root <dir>`, 15/15 for K = 4 and K = 8 |
 
 Decisions (v3):
