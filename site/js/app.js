@@ -12,6 +12,7 @@ const body = document.body;
 const cvReal = $('cv-real'), cvDream = $('cv-dream'), cvDrift = $('cv-drift');
 const ctxReal = cvReal.getContext('2d'), ctxDream = cvDream.getContext('2d'), ctxDrift = cvDrift.getContext('2d');
 const imgReal = ctxReal.createImageData(64, 64), imgDream = ctxDream.createImageData(64, 64);
+const cvMap = $('cv-map'), ctxMap = cvMap.getContext('2d');
 
 let spec, world, real, dream, meta = {};
 const realRGB = new Uint8Array(N);
@@ -19,6 +20,7 @@ const frameHist = [];                              // last K real frames (CHW fl
 const actHist = [];                                // actions that produced them
 let steps = 3, framesSince = 0, paused = false, ready = false, autoplay = false, tourIdx = 0, tour = [];
 const psnrHist = [];
+const wakeMarks = [];                              // indexes into psnrHist where the dream was (re)seeded from the real game
 const tickTimes = [];
 let emaMs = 0;
 const held = new Set();
@@ -90,7 +92,7 @@ function resetReal() {
 }
 function wake() {
   dream.reset(frameHist, actHist);
-  framesSince = 0; psnrHist.length = 0;
+  framesSince = 0; wakeMarks.push(psnrHist.length);
   const p = $('panel-dream'); p.classList.remove('woke'); void p.offsetWidth; p.classList.add('woke');
   updateReadouts();
   drawDrift();
@@ -104,7 +106,8 @@ async function tick(action) {
   const out = await dream.step(action);
   framesSince++; window.__ticks = (window.__ticks || 0) + 1;
   const p = psnr(realRGB, out.rgb);
-  psnrHist.push(Math.min(p, 50)); if (psnrHist.length > 400) psnrHist.shift();
+  psnrHist.push(Math.min(p, 50));
+  if (psnrHist.length > 400) { psnrHist.shift(); for (let i = 0; i < wakeMarks.length; i++) wakeMarks[i]--; while (wakeMarks.length && wakeMarks[0] < 0) wakeMarks.shift(); }
   drawRgb(ctxReal, imgReal, realRGB);
   drawRgb(ctxDream, imgDream, out.rgb);
   const now = performance.now();
@@ -126,6 +129,7 @@ function updateReadouts() {
   const sx = real ? real.x.toFixed(2) : '0.00', sy = real ? real.y.toFixed(2) : '0.00';
   const deg = real ? ((Math.atan2(real.dy, real.dx) * 180 / Math.PI + 360) % 360).toFixed(0) : '0';
   $('pose').textContent = `x ${sx} · y ${sy} · heading ${deg}°`;
+  drawMap();
 }
 
 function drawDrift() {
@@ -140,6 +144,9 @@ function drawDrift() {
   for (const g of [20, 30, 40]) { ctx.beginPath(); ctx.moveTo(0, y(g) + .5); ctx.lineTo(w, y(g) + .5); ctx.globalAlpha = .55; ctx.stroke(); ctx.globalAlpha = 1; ctx.fillText(String(g), 4, y(g) - 3); }
   if (psnrHist.length < 2) return;
   const n = 400, step = (w - 8) / (n - 1), x0 = 4;
+  ctx.save(); ctx.strokeStyle = 'rgba(245,158,11,.45)'; ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.lineWidth = dpr;
+  for (const m of wakeMarks) { const mx = x0 + m * step; ctx.beginPath(); ctx.moveTo(mx, 2); ctx.lineTo(mx, h); ctx.stroke(); }
+  ctx.restore();
   ctx.beginPath();
   psnrHist.forEach((v, i) => { const px = x0 + i * step; i ? ctx.lineTo(px, y(v)) : ctx.moveTo(px, y(v)); });
   const lx = x0 + (psnrHist.length - 1) * step;
@@ -149,6 +156,30 @@ function drawDrift() {
   ctx.beginPath();
   psnrHist.forEach((v, i) => { const px = x0 + i * step; i ? ctx.lineTo(px, y(v)) : ctx.moveTo(px, y(v)); });
   ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.6 * dpr; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+// top-down minimap of the real player (REAL panel): walls coloured like the map, amber dot + heading tick
+let mapLayer = null;
+function drawMap() {
+  if (!spec || !real) return;
+  const S = cvMap.width, cell = S / spec.size;
+  if (!mapLayer) {
+    mapLayer = document.createElement('canvas'); mapLayer.width = mapLayer.height = S;
+    const m = mapLayer.getContext('2d');
+    m.fillStyle = '#0b0e14'; m.fillRect(0, 0, S, S);
+    for (let r = 0; r < spec.size; r++) for (let c = 0; c < spec.size; c++) {
+      const ch = spec.map[r][c];
+      if (ch === '.') continue;
+      const rgb = spec.walls[String(spec.wall_chars[ch])].rgb;
+      m.fillStyle = `rgb(${rgb[0] * 0.8 | 0},${rgb[1] * 0.8 | 0},${rgb[2] * 0.8 | 0})`;
+      m.fillRect(c * cell, r * cell, cell, cell);
+    }
+  }
+  ctxMap.drawImage(mapLayer, 0, 0);
+  const px = real.x * cell, py = real.y * cell;
+  ctxMap.strokeStyle = '#f59e0b'; ctxMap.lineWidth = 1.6;
+  ctxMap.beginPath(); ctxMap.moveTo(px, py); ctxMap.lineTo(px + real.dx * cell * 1.6, py + real.dy * cell * 1.6); ctxMap.stroke();
+  ctxMap.fillStyle = '#ffffff'; ctxMap.beginPath(); ctxMap.arc(px, py, Math.max(1.4, cell * 0.38), 0, 7); ctxMap.fill();
 }
 
 function setKeyLights(set) {
@@ -242,7 +273,12 @@ async function boot() {
     try {
       const ev = await (await fetch('models/eval_summary.json')).json();
       const span = document.querySelector('[data-eval="drift"]');
-      if (span && ev.psnr_at) span.textContent = `On the game's own exploration trajectories the dream scores ${ev.psnr_at['32'].toFixed(1)} dB after 32 frames, ${ev.psnr_at['128'].toFixed(1)} dB after 128 and ${ev.psnr_at['512'].toFixed(1)} dB after 512 (an unrelated frame scores about ${ev.floor.toFixed(0)} dB).`;
+      if (span && ev.psnr_at) {
+        const g = (k) => (ev.psnr_at[k] !== undefined ? ev.psnr_at[k].toFixed(1) : null);
+        let t = `Measured on the game's own exploration trajectories (${ev.episodes} episodes): the dream matches the real frame at ${g('1')} dB after 1 frame, ${g('16')} dB after 16, ${g('32')} dB after 32 and ${g('128')} dB after 128; an unrelated frame scores about ${ev.floor.toFixed(0)} dB.`;
+        if (ev.validity) t += ` Even where it no longer matches, its frames stay game-like: ${ev.validity.dream_mean.toFixed(1)} dB to the nearest real frame, against ${ev.validity.real_mean.toFixed(1)} dB for real frames.`;
+        span.textContent = t + ' ';
+      }
     } catch (e) { /* optional */ }
     world = new World(spec);
     resetReal();
@@ -286,7 +322,7 @@ async function run() {
     const now = performance.now();
     if (now - hudAt > 150) { hudAt = now; updateReadouts(); drawDrift(); }
     const budget = 1000 / TICK_HZ;
-    while (performance.now() - t0 < budget - 1.5) await nextFrame();
+    do { await nextFrame(); } while (performance.now() - t0 < budget - 1.5);      // always yield: paint + key events
   }
 }
 

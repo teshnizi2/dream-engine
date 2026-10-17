@@ -5,7 +5,9 @@
   "description": "Dev tooling only (browser benchmarks and video capture). The site itself has no build step.",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "serve": "python3 -m http.server 8765 --directory site"
+    "serve": "python3 -m http.server 8765 --directory site",
+    "smoke": "node tools/site_smoke.mjs",
+    "fps": "node tools/browser_fps.mjs --out results/browser_fps.json"
   },
   "devDependencies": {
     "puppeteer-core": "24.43.1"

@@ -207,6 +207,9 @@ def main():
     ap.add_argument("--depths", default="2,2,2,2")
     ap.add_argument("--out", default="site/models")
     ap.add_argument("--name", default="dream")
+    ap.add_argument("--ctx-sigma", type=float, default=0.1, help="default context-noise level used by the demo sampler")
+    ap.add_argument("--init", default="edm", choices=["edm", "unit"], help="sampler start: sigma_max*N(0,1) or N(0,1)")
+    ap.add_argument("--default-steps", type=int, default=3, help="default Euler steps per frame in the demo")
     ap.add_argument("--fp16", action="store_true")
     ap.add_argument("--verify", action="store_true")
     a = ap.parse_args()
@@ -250,7 +253,8 @@ def main():
             (out / "testvec.json").write_text(json.dumps(index))
     meta = {"params": n_params, "config": {k: (list(v) if isinstance(v, tuple) else v) for k, v in model.cfg.__dict__.items()},
             "checkpoint_step": step, "sigma_max": 5.0, "sigma_min": 2e-3, "rho": 7.0, "sigma_data": model.cfg.sigma_data,
-            "sigma_offset_noise": model.cfg.sigma_offset_noise}
+            "sigma_offset_noise": model.cfg.sigma_offset_noise,
+            "ctx_sigma": a.ctx_sigma, "sampler_init": a.init, "default_steps": a.default_steps}
     (out / f"{a.name}_meta.json").write_text(json.dumps(meta, indent=1))
     res = ROOT / "results"
     res.mkdir(exist_ok=True)

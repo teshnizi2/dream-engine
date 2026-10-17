@@ -105,3 +105,32 @@ def rollout_metrics(denoise_fn: Callable, traj: Dict[str, torch.Tensor], horizon
     if return_frames:
         res["frames"] = torch.cat(gens)
     return res
+
+
+def make_frame_bank(world, n: int = 20000, seed: int = 777):
+    """A bank of real game frames from the exploration policy (the reference set for `nearest_real_psnr`)."""
+    src = TrajectorySource(world, 256, 2, seed=seed, warmup_max=30)
+    frames = []
+    while sum(len(f) for f in frames) < n:
+        frames.append(src.next_batch()["frames"][:, 1])
+    f = np.concatenate(frames)[:n]
+    return {"frames": _to_unit(f)}
+
+
+@torch.no_grad()
+def nearest_real_psnr(frames: torch.Tensor, bank, chunk: int = 512) -> torch.Tensor:
+    """For each frame [M, 3, 64, 64] in [-1,1]: PSNR (dB, 8-bit range) to its nearest neighbour in the bank of real
+    frames. High = the frame looks like a frame of the real game (even if it is not the true next frame)."""
+    dev = frames.device
+    b = bank.get("flat")
+    if b is None or b.device != dev:
+        b = ((bank["frames"].to(dev) + 1) / 2).flatten(1)
+        bank["flat"] = b
+    bn = (b * b).sum(1)
+    out = []
+    for i in range(0, len(frames), chunk):
+        a = ((frames[i:i + chunk] + 1) / 2).flatten(1).to(dev)
+        d2 = (a * a).sum(1, keepdim=True) + bn[None] - 2 * a @ b.T
+        mse = d2.min(1).values.clamp(min=0) / a.shape[1]
+        out.append(10 * torch.log10(1.0 / mse.clamp(min=1e-10)))
+    return torch.cat(out).clamp(max=100).cpu()

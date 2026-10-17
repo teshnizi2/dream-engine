@@ -52,6 +52,7 @@ def parse_args(argv=None):
     p.add_argument("--compile", action="store_true")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--resume", action="store_true")
+    p.add_argument("--init-from", default=None, help="start from the EMA weights of another run's checkpoint (fresh optimiser, step 0)")
     p.add_argument("--eval-every", type=int, default=500, help="0 disables evaluation")
     p.add_argument("--eval-n", type=int, default=64)
     p.add_argument("--log-every", type=int, default=50)
@@ -125,6 +126,10 @@ def main(argv=None):
     torch.manual_seed(a.seed)
     model = Denoiser(cfg).to(device)
     ema = Denoiser(cfg).to(device)
+    if a.init_from and not (a.resume and (out / "ckpt_last.pt").exists()):
+        src = torch.load(a.init_from, map_location=device, weights_only=False)
+        model.load_state_dict(src["ema"])
+        print(f"initialised from EMA weights of {a.init_from} (step {src.get('step')})", flush=True)
     ema.load_state_dict(model.state_dict())
     ema.eval().requires_grad_(False)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=a.wd, eps=1e-8)

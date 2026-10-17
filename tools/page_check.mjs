@@ -21,10 +21,16 @@ try {
   const page = await browser.newPage();
   const w = +(args.width || 1280), h = +(args.height || 900);
   await page.setViewport({ width: w, height: h, deviceScaleFactor: +(args.dpr || 1), isMobile: !!args.mobile, hasTouch: !!args.mobile });
-  page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) logs.push(`[${m.type()}] ${m.text()}`.slice(0, 300)); });
+  page.on('console', (m) => { const line = `[${m.type()}] ${m.text()}`.slice(0, 300); if (args.verbose) console.log('  page>', line); else if (['error', 'warning'].includes(m.type())) logs.push(line); });
   page.on('pageerror', (e) => logs.push('[pageerror] ' + String(e).slice(0, 300)));
-  await page.goto(`http://127.0.0.1:${srv.port}/${args.path || 'site/index.html'}`);
-  await page.waitForFunction(() => !document.body.classList.contains('loading'), { timeout: +(args.timeout || 120000) });
+  await page.goto(args.base ? args.base : `http://127.0.0.1:${srv.port}/${args.path || 'site/index.html'}`);
+  try {
+    await page.waitForFunction(() => !document.body.classList.contains('loading'), { timeout: +(args.timeout || 120000) });
+  } catch (e) {
+    console.log('TIMEOUT while loading. veil text:', await page.evaluate(() => document.getElementById('veil-text').textContent));
+    console.log('console issues:\n' + logs.join('\n'));
+    throw e;
+  }
   await new Promise((r) => setTimeout(r, +(args.wait || 1500)));
   for (const hold of String(args.hold || '').split(',').filter(Boolean)) {
     const [code, ms] = hold.split(':');

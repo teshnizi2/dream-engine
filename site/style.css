@@ -93,7 +93,9 @@ kbd {
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); align-self: center; flex: none; }
 .dot.live { background: var(--amber); box-shadow: 0 0 0 0 rgba(var(--amber-rgb), .6); animation: pulse 2.4s ease-out infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--amber-rgb), .55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(var(--amber-rgb), 0); } }
-.panel-foot { margin: 9px 2px 0; font: 400 11.5px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; height: 12px; }
+.panel-foot { margin: 9px 2px 0; font: 400 11.5px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; min-height: 12px; }
+.mapbox { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 4px; }
+.minimap { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 6px; background: #0b0e14; border: 1px solid var(--line); }
 .panel.dream {
   border-color: rgba(var(--amber-rgb), .38);
   box-shadow: 0 0 0 1px rgba(var(--amber-rgb), .06), 0 18px 70px -22px rgba(var(--amber-rgb), .34);
@@ -165,16 +167,16 @@ body.dreamonly .stage { grid-template-columns: auto auto; }
 @media (pointer: coarse), (max-width: 760px) {
   .touchpad {
     display: flex; position: sticky; bottom: 0; z-index: 5; justify-content: space-between; align-items: flex-end;
-    padding: 10px 16px max(14px, env(safe-area-inset-bottom)); gap: 10px;
+    padding: 10px 12px max(14px, env(safe-area-inset-bottom)); gap: 8px;
     background: linear-gradient(to top, rgba(14,17,23,.96) 55%, rgba(14,17,23,0));
   }
-  .tp-left, .tp-right { display: flex; gap: 10px; }
-  .tp-mid { display: flex; gap: 8px; }
+  .tp-left, .tp-right { display: flex; gap: min(10px, 2.6vw); }
+  .tp-mid { display: flex; flex-direction: column; gap: 6px; }
   .tp {
-    width: 68px; height: 68px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    width: min(68px, 17vw); height: min(68px, 17vw); border-radius: 18px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
     font: 600 20px/1 var(--mono); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   }
-  .tp.sm { width: 44px; height: 44px; border-radius: 12px; font-size: 14px; color: var(--muted); }
+  .tp.sm { width: min(44px, 11vw); height: min(44px, 11vw); border-radius: 12px; font-size: 14px; color: var(--muted); }
   .tp.on { background: var(--amber); color: #1a1204; border-color: #ffb02e; }
   .keys { display: none; }
 }
@@ -225,7 +227,9 @@ body.capture .keys { order: 3; grid-column: 1 / -1; flex-direction: row; margin-
 body.capture .panel { padding: 14px 14px 10px; }
 body.capture .panel-head b { font-size: 17px; }
 body.capture .panel-head .sub { font-size: 14px; }
-body.capture .panel-foot { font-size: 14px; height: 15px; }
+body.capture .panel-foot { font-size: 14px; min-height: 15px; }
+body.capture .mapbox { flex-direction: row; align-items: center; gap: 12px; margin: 0; }
+body.capture .minimap { width: 112px; height: 112px; }
 body.capture .keys { gap: 26px; }
 body.capture .keys-cluster { grid-template-columns: repeat(3, 56px); gap: 8px; }
 body.capture .keys-cluster .key { height: 52px; font-size: 18px; }

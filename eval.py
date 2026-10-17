@@ -57,6 +57,39 @@ def action_class(a):
     return "noop"
 
 
+HOLD_ACTIONS = {"forward": (1, 0, 0), "back": (2, 0, 0), "turn_left": (0, 0, 1), "turn_right": (0, 0, 2),
+                "strafe_left": (0, 1, 0), "strafe_right": (0, 2, 0), "forward+left": (1, 0, 1), "forward+right": (1, 0, 2)}
+
+
+def hold_action_rollouts(world, denoise, n=24, horizon=24, steps=3, ctx_sigma=0.1, init="edm", seed=5, device="cpu"):
+    """Hold one key for `horizon` frames from n random poses (4 standing-still frames as context): how well does the
+    dream follow each control? Returns PSNR at a few frame indices per action, and the copy-the-last-frame baseline."""
+    from data.policy import ExplorationPolicy
+    rng = np.random.default_rng(seed)
+    st0 = ExplorationPolicy(world, n, rng, respawn_prob=0.0).random_states(n)
+    res = {}
+    for name, act in HOLD_ACTIONS.items():
+        st = st0
+        frames = [world.render(st)]
+        acts = []
+        for _ in range(3):
+            acts.append(np.zeros((n, 3), np.int64))
+            frames.append(world.render(st))                       # noop: the same frame
+        for _ in range(horizon):
+            a = np.tile(np.array(act, np.int64), (n, 1))
+            acts.append(a)
+            st = world.step(st, a)
+            frames.append(world.render(st))
+        fr = ev._to_unit(np.stack(frames, 1))                      # [n, T, 3, 64, 64]
+        traj = {"frames": fr, "actions": torch.from_numpy(np.stack(acts, 1))}
+        r = ev.rollout_metrics(denoise, traj, horizon=horizon, steps=steps, order=1, ctx_sigma=ctx_sigma, init=init, batch=n)
+        fz, _ = frozen_baseline(traj, horizon)
+        idx = [i for i in (1, 4, 8, 16, 24) if i <= horizon]
+        res[name] = {"dream_psnr_at": {str(i): float(r["psnr"][i - 1]) for i in idx},
+                     "freeze_psnr_at": {str(i): float(fz[i - 1]) for i in idx}}
+    return res
+
+
 def frozen_baseline(traj, horizon, K=4):
     fr = traj["frames"]
     last = fr[:, K - 1:K].expand(-1, horizon, -1, -1, -1)
@@ -73,12 +106,15 @@ def uncorrelated_floor(traj, horizon, K=4):
     return p.mean(0).numpy()
 
 
-def save_drift_figure(path, curves, floor, frozen, horizon_marks=(32, 128, 512)):
+def save_drift_figure(path, curves, floor, frozen, nn_dream=None, nn_real=None, horizon_marks=(32, 128, 512)):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     t = TOKENS
-    fig, ax = plt.subplots(figsize=(7.2, 4.2), dpi=200)
+    fig, axes = plt.subplots(2 if nn_dream is not None else 1, 1, figsize=(7.2, 6.4 if nn_dream is not None else 4.2), dpi=200,
+                             gridspec_kw={"height_ratios": [3, 2]} if nn_dream is not None else None, sharex=True)
+    axes = np.atleast_1d(axes)
+    ax = axes[0]
     fig.patch.set_facecolor(t["bg"])
     ax.set_facecolor(t["panel"])
     x = np.arange(1, len(floor) + 1)
@@ -92,14 +128,24 @@ def save_drift_figure(path, curves, floor, frozen, horizon_marks=(32, 128, 512))
             ax.axvline(h, color=t["line"], lw=0.8)
             ax.text(h, ax.get_ylim()[1], f" {h}", color=t["muted"], fontsize=7, va="top")
     ax.set_xscale("log")
-    ax.set_xlabel("frames since wake-up (autoregressive, no real frames)", color=t["text"], fontsize=8)
     ax.set_ylabel("PSNR vs the real game (dB)", color=t["text"], fontsize=8)
-    ax.tick_params(colors=t["muted"], labelsize=7)
-    for s in ax.spines.values():
-        s.set_color(t["line"])
-    ax.grid(color=t["line"], lw=0.4, alpha=0.6)
-    leg = ax.legend(fontsize=7, facecolor=t["panel"], edgecolor=t["line"], labelcolor=t["text"], loc="upper right")
+    ax.legend(fontsize=7, facecolor=t["panel"], edgecolor=t["line"], labelcolor=t["text"], loc="upper right")
     ax.set_title("Dream drift: same actions, no game code", color=t["text"], fontsize=10, loc="left")
+    if nn_dream is not None:
+        ax2 = axes[1]
+        ax2.set_facecolor(t["panel"])
+        xx = np.arange(1, len(nn_dream) + 1)
+        ax2.plot(xx, nn_real, color=t["muted"], lw=1.2, ls="--", label="real frames (reference)")
+        ax2.plot(xx, nn_dream, color=t["amber"], lw=1.8, label="dream frames")
+        ax2.set_ylabel("PSNR to the nearest\nreal frame (dB)", color=t["text"], fontsize=8)
+        ax2.legend(fontsize=7, facecolor=t["panel"], edgecolor=t["line"], labelcolor=t["text"], loc="lower left")
+        ax2.set_title("Is it still a game frame? (valid even where it no longer matches the true frame)", color=t["text"], fontsize=8, loc="left")
+    axes[-1].set_xlabel("frames since wake-up (autoregressive, no real frames)", color=t["text"], fontsize=8)
+    for a_ in axes:
+        a_.tick_params(colors=t["muted"], labelsize=7)
+        for sp in a_.spines.values():
+            sp.set_color(t["line"])
+        a_.grid(color=t["line"], lw=0.4, alpha=0.6)
     fig.savefig(path, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close(fig)
 
@@ -141,6 +187,7 @@ def main():
     ap.add_argument("--n-val", type=int, default=256)
     ap.add_argument("--long", type=int, default=512, help="longest rollout (frames)")
     ap.add_argument("--episodes", type=int, default=8, help="episodes for the longest rollout")
+    ap.add_argument("--bank", type=int, default=12000, help="size of the real-frame bank for the validity metric")
     ap.add_argument("--no-figs", action="store_true")
     ap.add_argument("--quick", action="store_true", help="smaller sweeps (smoke checks)")
     a = ap.parse_args()
@@ -165,7 +212,7 @@ def main():
             sweep[f"euler3_init={init}_ctx={cs}"] = {"psnr": m["psnr"], "ssim": m["ssim"]}
     out["one_step_ctx_init_sweep"] = sweep
     samplers = {}
-    for name, steps, order in (("euler1", 1, 1), ("euler2", 2, 1), ("euler3", 3, 1), ("heun2", 2, 2)):
+    for name, steps, order in (("euler1", 1, 1), ("euler2", 2, 1), ("euler3", 3, 1), ("heun2", 2, 2), ("heun3", 3, 2)):
         torch.manual_seed(0)
         t = time.time()
         m = ev.one_step_metrics(model.denoise, val, steps=steps, order=order, ctx_sigma=0.1, init="edm")
@@ -210,6 +257,16 @@ def main():
                              "mean_psnr_first32": float(r["psnr"][:32].mean()),
                              "mean_psnr_first128": float(r["psnr"][:128].mean()),
                              "mean_psnr_all": float(r["psnr"].mean()), "episodes": a.episodes, "horizon": L}
+    # does the dream stay a valid game frame even when it no longer matches the true frame?
+    bank = ev.make_frame_bank(world, n=a.bank if not a.quick else 4000)
+    gt_long = long_traj["frames"][:, 4:4 + L]
+    nn_dream = ev.nearest_real_psnr(r["frames"].flatten(0, 1).to(dev), bank).view(a.episodes, L).mean(0).numpy()
+    nn_real = ev.nearest_real_psnr(gt_long.flatten(0, 1).to(dev), bank).view(a.episodes, L).mean(0).numpy()
+    out["validity_nearest_real_frame_psnr"] = {
+        "note": "PSNR of each frame to its nearest neighbour among %d real frames; real = the true game frames of the same episodes" % len(bank["frames"]),
+        "dream_at": summarize(nn_dream), "real_at": summarize(nn_real),
+        "dream_mean": float(nn_dream.mean()), "real_mean": float(nn_real.mean())}
+    print("validity (nearest real frame PSNR): dream %.1f vs real %.1f" % (nn_dream.mean(), nn_real.mean()), flush=True)
     for h, n_ep in ((32, 32), (128, 16)):
         if h <= L:
             rr = ev.rollout_metrics(model.denoise, {k: v[:n_ep] for k, v in traj.items()}, horizon=h, steps=3,
@@ -225,6 +282,8 @@ def main():
     floor = uncorrelated_floor(long_traj, L)
     out["baseline_freeze_last_real_frame"] = {"psnr_at": summarize(fz_p), "ssim_at": summarize(fz_s)}
     out["baseline_unrelated_frame_psnr"] = float(floor.mean())
+    out["hold_one_key"] = hold_action_rollouts(world, model.denoise, steps=3, ctx_sigma=best_cs, device=str(dev))
+    print("hold-one-key PSNR@8:", {k: round(v["dream_psnr_at"]["8"], 1) for k, v in out["hold_one_key"].items()}, flush=True)
     out["eval_wall_seconds"] = time.time() - t_start
 
     res = ROOT / "results"
@@ -235,7 +294,7 @@ def main():
     if not a.no_figs:
         media = ROOT / "media"
         media.mkdir(exist_ok=True)
-        save_drift_figure(media / "drift.png", {k: v for k, v in list(curves.items())[:1]}, floor, fz_p)
+        save_drift_figure(media / "drift.png", {k: v for k, v in list(curves.items())[:1]}, floor, fz_p, nn_dream, nn_real)
         gen = r["frames"]
         gt = long_traj["frames"][:, 4:4 + L]
         save_rollout_grid(media / "rollout_grid.png", gt, gen)

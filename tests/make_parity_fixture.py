@@ -15,6 +15,7 @@ import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from game import raycaster as rc  # noqa: E402
+from model.sampler import build_sigmas  # noqa: E402
 
 OUT = ROOT / "tests" / "fixtures"
 
@@ -80,6 +81,7 @@ def main():
         "pose": to_lists(pose),
         "edge": to_lists(ex),
         "frame_shape": [spec["height"], spec["width"], 3],
+        "sigmas": {str(n): build_sigmas(n, 2e-3, 5.0, 7.0).double().tolist() for n in (1, 2, 3)},
     }
     (OUT / "parity.json").write_text(json.dumps(meta))
     blob = np.concatenate([traj_frames.reshape(-1, 64, 64, 3), pose_frames, edge_frames]).astype(np.uint8)

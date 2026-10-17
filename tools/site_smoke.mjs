@@ -1,0 +1,65 @@
+// End-to-end smoke test of the demo page in headless Edge (WebGPU): loads, ticks, reacts to keys and buttons, no errors,
+// no horizontal scroll at phone width.   node tools/site_smoke.mjs
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer-core';
+import { startServer } from './serve.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const srv = await startServer(path.resolve(here, '..'), 0);
+const browser = await puppeteer.launch({ executablePath: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', headless: 'new', args: ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--ignore-gpu-blocklist'] });
+const results = [];
+const check = (name, ok, detail = '') => { results.push({ name, ok }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  ' + detail : ''}`); };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const errors = [];
+try {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 860 });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + String(e).slice(0, 200)));
+  page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) errors.push('console: ' + m.text().slice(0, 200)); });
+  await page.goto(`http://127.0.0.1:${srv.port}/site/index.html`);
+  await page.waitForFunction(() => !document.body.classList.contains('loading'), { timeout: 180000 });
+  await wait(1500);
+  const txt = (sel) => page.evaluate((s) => document.querySelector(s).textContent, sel);
+  check('backend readout shows the active execution provider', /WebGPU|WASM/.test(await txt('#r-backend')), await txt('#r-backend'));
+  check('model parameter count is shown', /\d+(\.\d+)?M/.test(await txt('#r-params')), await txt('#r-params'));
+  const t0 = await page.evaluate(() => window.__ticks || 0);
+  const pose0 = await txt('#pose');
+  await page.keyboard.down('KeyW'); await wait(1800);
+  const litW = await page.evaluate(() => document.querySelector('.keys .key[data-k="F"]').classList.contains('on'));
+  await page.keyboard.up('KeyW');
+  const t1 = await page.evaluate(() => window.__ticks || 0);
+  check('simulation ticks while running', t1 - t0 >= 2, `${t1 - t0} ticks in ~1.8 s (speed is measured separately, tools/browser_fps.mjs)`);
+  check('W lights the key and moves the real player', litW && (await txt('#pose')) !== pose0, `${pose0} -> ${await txt('#pose')}`);
+  await page.click('.seg-b[data-steps="1"]'); await wait(600);
+  check('steps control changes steps per frame', (await txt('#r-steps')) === '1');
+  await page.click('.seg-b[data-steps="3"]');
+  await wait(1200);
+  const since = +(await txt('#r-since'));
+  await page.click('#btn-wake'); await wait(100);
+  check('Wake up resets frames since wake-up', +(await txt('#r-since')) < since, `${since} -> ${await txt('#r-since')}`);
+  await page.click('#btn-dreamonly');
+  check('Dream only hides the real panel', await page.evaluate(() => getComputedStyle(document.getElementById('panel-real')).display === 'none'));
+  await page.click('#btn-dreamonly');
+  await page.click('#btn-about'); await wait(500);
+  check('About drawer opens', await page.evaluate(() => document.getElementById('drawer').classList.contains('open')));
+  await page.keyboard.press('Escape'); await wait(500);
+  check('Escape closes the drawer', await page.evaluate(() => !document.getElementById('drawer').classList.contains('open')));
+  await page.click('#btn-auto'); const p1 = await txt('#pose'); await wait(2500);
+  check('Autoplay walks the scripted tour', (await txt('#pose')) !== p1);
+  await page.click('#btn-auto');
+  await page.click('#btn-pause'); const tp = await page.evaluate(() => window.__ticks); await wait(700);
+  check('Pause stops the simulation', (await page.evaluate(() => window.__ticks)) - tp <= 1);
+  await page.click('#btn-pause');
+  const m = await browser.newPage();
+  await m.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await m.goto(`http://127.0.0.1:${srv.port}/site/index.html`);
+  await m.waitForFunction(() => !document.body.classList.contains('loading'), { timeout: 180000 });
+  await wait(800);
+  check('no horizontal scroll at 375 px', await m.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), await m.evaluate(() => `${document.documentElement.scrollWidth} <= ${window.innerWidth}`));
+  check('touch controls are visible on phones', await m.evaluate(() => getComputedStyle(document.getElementById('touchpad')).display !== 'none'));
+  check('no page errors or console errors', errors.length === 0, errors.join(' | '));
+} finally { await browser.close(); srv.close(); }
+const failed = results.filter((r) => !r.ok).length;
+console.log(`\n${results.length - failed}/${results.length} checks passed`);
+process.exit(failed ? 1 : 0);

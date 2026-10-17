@@ -57,6 +57,7 @@
         <span class="key" data-k="L" title="Turn left">A</span><span class="key" data-k="B" title="Back">S</span><span class="key" data-k="R" title="Turn right">D</span>
       </div>
       <p class="keys-note">The same keypresses go to both panels. Arrow keys work too.</p>
+      <div class="mapbox"><canvas id="cv-map" class="minimap" width="96" height="96" aria-label="Top-down map with the real player position"></canvas><span class="lab">real position</span></div>
     </div>
   </main>
 
@@ -86,7 +87,7 @@
   </section>
 
   <section class="drift card" aria-label="Drift of the dream away from the real game">
-    <div class="drift-head"><span class="lab">Drift</span><span class="muted">PSNR of the dream against the real frame, dB (higher = closer)</span></div>
+    <div class="drift-head"><span class="lab">Drift</span><span class="muted">PSNR of the dream against the real frame, dB (higher = closer). Dashed lines: wake-ups.</span></div>
     <canvas id="cv-drift" width="900" height="72"></canvas>
   </section>
 

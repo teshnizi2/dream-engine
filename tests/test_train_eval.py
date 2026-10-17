@@ -102,3 +102,32 @@ def test_train_script_supports_unrolled_training(tmp_path):
     assert ck["step"] == 4
     rows = [json.loads(l) for l in (tmp_path / "metrics.jsonl").read_text().splitlines()]
     assert all(np.isfinite(r_["loss"]) for r_ in rows)
+
+
+# ------------------------------------------------------------------ "is the dream still a valid game frame?" metric
+
+def test_nearest_real_frame_psnr_ranks_real_noisy_and_random_frames(world):
+    bank = ev.make_frame_bank(world, n=600, seed=1)
+    t = ev.eval_trajectories_t(world, n=2, length=8, seed=2)
+    real_in_bank = bank["frames"][:5]
+    p_bank = ev.nearest_real_psnr(real_in_bank, bank)
+    assert (p_bank >= 45).all(), "a frame that is in the bank has an exact match (GEMM round-off caps the value near 50-60 dB)"
+    noisy = (real_in_bank + 0.2 * torch.randn_like(real_in_bank)).clamp(-1, 1)
+    p_noisy = ev.nearest_real_psnr(noisy, bank)
+    p_rand = ev.nearest_real_psnr(torch.rand(5, 3, 64, 64) * 2 - 1, bank)
+    assert (p_noisy > p_rand + 3).all() and (p_noisy < p_bank).all()
+    held_out = ev.nearest_real_psnr(t["frames"][:, 4], bank)         # real frames not in the bank
+    assert held_out.mean() > p_rand.mean() + 3
+
+
+def test_train_script_can_start_from_another_runs_ema_weights(tmp_path):
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    assert run_train(a, "--steps", "4").returncode == 0
+    r = run_train(b, "--steps", "3", "--init-from", str(a / "ckpt_last.pt"))
+    assert r.returncode == 0, r.stderr[-2000:]
+    ck = torch.load(b / "ckpt_last.pt", map_location="cpu", weights_only=False)
+    src = torch.load(a / "ckpt_last.pt", map_location="cpu", weights_only=False)
+    assert ck["step"] == 3                                    # a fresh step counter and optimiser ...
+    k = next(k for k in src["ema"] if "conv_in.weight" in k)
+    assert (ck["model"][k] - src["ema"][k]).abs().max() < 0.05   # ... but the weights started from the source EMA

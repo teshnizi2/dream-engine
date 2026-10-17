@@ -16,3 +16,4 @@ tests/fixtures/
 media/frames/
 runs/
 tools/bench_models/
+site/models/*.onnx

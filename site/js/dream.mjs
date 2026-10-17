@@ -7,41 +7,8 @@
 // act [1,4,9] (one-hot), ctx_sigma [1] -> denoised [1,3,64,64].
 
 import * as ort from 'onnxruntime-web';
-
-export const SIZE = 64;
-export const PIX = SIZE * SIZE;
-export const N = 3 * PIX;
-export const K = 4;
-
-export function buildSigmas(steps, smin = 2e-3, smax = 5, rho = 7) {
-  const a = Math.pow(smax, 1 / rho), b = Math.pow(smin, 1 / rho);
-  const s = [];
-  for (let i = 0; i < steps; i++) {
-    const l = steps === 1 ? 0 : i / (steps - 1);
-    s.push(Math.pow(a + l * (b - a), rho));
-  }
-  s.push(0);
-  return s;
-}
-
-// mulberry32 + Box-Muller, so that capture runs are reproducible
-export class Rng {
-  constructor(seed = 1) { this.s = seed >>> 0; this.spare = null; }
-  next() {
-    let t = (this.s += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }
-  randn() {
-    if (this.spare !== null) { const v = this.spare; this.spare = null; return v; }
-    let u = 0;
-    while (u === 0) u = this.next();
-    const v = this.next(), r = Math.sqrt(-2 * Math.log(u));
-    this.spare = r * Math.sin(2 * Math.PI * v);
-    return r * Math.cos(2 * Math.PI * v);
-  }
-}
+import { SIZE, PIX, N, K, buildSigmas, Rng } from './util.mjs';
+export { SIZE, PIX, N, K, buildSigmas, Rng, rgbToChw, psnr } from './util.mjs';
 
 const POOL = 1 << 20;
 
@@ -69,8 +36,9 @@ export class Dream {
   }
 
   async _open(modelBytes, backend, capture, onStatus) {
-    ort.env.wasm.numThreads = (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
-    ort.env.wasm.proxy = false;
+    const th = new URLSearchParams(location.search).get('threads');
+    ort.env.wasm.numThreads = th ? +th : ((typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) ? Math.min(4, navigator.hardwareConcurrency || 2) : 1);
+    ort.env.wasm.proxy = backend === 'wasm';      // keep the UI thread free when inference runs on the CPU
     const t0 = performance.now();
     let adapter = null;
     if (backend !== 'wasm' && navigator.gpu) {
@@ -97,6 +65,7 @@ export class Dream {
       }
     }
     if (!this.session) {
+      console.log('[dream] creating wasm session');
       onStatus('compiling WASM graph (slow path)');
       this.session = await ort.InferenceSession.create(modelBytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
       this.info.backend = 'wasm';
@@ -104,6 +73,7 @@ export class Dream {
       await this._warmup();
     }
     this.info.loadMs = performance.now() - t0;
+    console.log('[dream] ready', this.info.backend, Math.round(this.info.loadMs), 'ms');
   }
 
   _initGpuIo() {
@@ -125,6 +95,7 @@ export class Dream {
   }
 
   async _warmup() {
+    console.log('[dream] warmup');
     const saved = this.frames.map((f) => f.slice());
     for (let i = 0; i < 3; i++) await this.step([0, 0, 0]);
     this.frames.forEach((f, k) => f.set(saved[k]));
@@ -154,11 +125,12 @@ export class Dream {
       const out = await this.session.run(this.gpuFeeds);
       return await out.denoised.getData();
     }
+    // copies: in proxy (worker) mode onnxruntime-web transfers the input buffers, which would detach ours
     const feeds = {
-      x: new ort.Tensor('float32', x, [1, 3, SIZE, SIZE]),
+      x: new ort.Tensor('float32', x.slice(), [1, 3, SIZE, SIZE]),
       sigma: new ort.Tensor('float32', this.sigArr.slice(0, 1), [1]),
-      ctx: new ort.Tensor('float32', this.ctxArr, [1, K * 3, SIZE, SIZE]),
-      act: new ort.Tensor('float32', this.actArr, [1, K, 9]),
+      ctx: new ort.Tensor('float32', this.ctxArr.slice(), [1, K * 3, SIZE, SIZE]),
+      act: new ort.Tensor('float32', this.actArr.slice(), [1, K, 9]),
       ctx_sigma: new ort.Tensor('float32', this.csArr.slice(0, 1), [1]),
     };
     const out = await this.session.run(feeds);
@@ -221,15 +193,3 @@ export class Dream {
   }
 }
 
-// helpers shared with the app
-export function rgbToChw(rgb, out = new Float32Array(N)) {
-  for (let p = 0; p < PIX; p++) for (let c = 0; c < 3; c++) out[c * PIX + p] = rgb[p * 3 + c] / 127.5 - 1;
-  return out;
-}
-
-export function psnr(a, b) {
-  let se = 0;
-  for (let i = 0; i < a.length; i++) { const d = a[i] - b[i]; se += d * d; }
-  const mse = se / a.length;
-  return mse < 1e-9 ? 99 : 10 * Math.log10((255 * 255) / mse);
-}
