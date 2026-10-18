@@ -1,6 +1,7 @@
 {
   "name": "dream-engine",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Dev tooling only (browser benchmarks and video capture). The site itself has no build step.",
   "scripts": {
