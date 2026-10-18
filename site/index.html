@@ -21,19 +21,33 @@
 <meta name="twitter:title" content="Dream Engine: a game that only exists in a neural network&#x27;s dream">
 <meta name="twitter:description" content="A tiny diffusion model learned a first-person maze game from pixels. In this tab it is the game: left the real engine, right the network imagining every frame from your keypresses.">
 <meta name="twitter:image" content="https://dream.teshnizi.dev/og.jpg">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230e1117'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23e8ecf5'/%3E%3Crect x='9' y='3' width='4' height='4' fill='%232e3a52'/%3E%3Crect x='3' y='9' width='4' height='4' fill='%232e3a52'/%3E%3Crect x='9' y='9' width='4' height='4' fill='%23f59e0b'/%3E%3C/svg%3E">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs" crossorigin>
-<link rel="preload" as="fetch" href="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort-wasm-simd-threaded.jsep.wasm" crossorigin>
+<!-- fonts never block the first paint: the system fonts show until they arrive (font-display: swap) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap"></noscript>
 <script type="importmap">
-{ "imports": { "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs" } }
+{ "imports": {
+  "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs",
+  "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs"
+} }
+</script>
+<script>
+// Only a browser with WebGPU needs the WebGPU runtime and its 28 MB wasm: start those downloads now, in parallel with the page.
+// Everyone else gets the recording first and fetches the smaller WASM runtime only if they ask to run the model.
+var c = navigator.connection || {};
+if (navigator.gpu && !/[?&]backend=wasm\b/.test(location.search) && !(navigator.deviceMemory <= 2) && !c.saveData && !/^(slow-2g|2g|3g)$/.test(c.effectiveType || '')) {
+  var l = document.createElement('link'); l.rel = 'modulepreload'; l.crossOrigin = ''; l.href = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs'; document.head.appendChild(l);
+  l = document.createElement('link'); l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = ''; l.href = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort-wasm-simd-threaded.jsep.wasm'; document.head.appendChild(l);
+}
 </script>
 </head>
 <body class="loading">
-<noscript><p style="padding:24px;font:16px sans-serif;color:#e8ecf5">Dream Engine needs JavaScript (and ideally WebGPU) to run.</p></noscript>
+<noscript><p style="padding:24px;font:16px sans-serif;color:#e8ecf5">Dream Engine needs JavaScript to run the live model. <a href="media/dream-640.mp4" style="color:#f59e0b">Watch the recording</a> instead.</p></noscript>
 <div class="grain" aria-hidden="true"></div>
 
 <div class="app">
@@ -50,13 +64,18 @@
     </nav>
   </header>
 
+  <section class="gate card" id="gate" hidden aria-labelledby="gate-why">
+    <p class="gate-why" id="gate-why"></p>
+    <div class="gate-actions"><button class="btn primary" id="gate-run" type="button">Run the live model anyway</button></div>
+  </section>
+
   <main class="stage" id="stage">
     <section class="panel real" id="panel-real" aria-label="Real game">
       <header class="panel-head">
         <span class="dot" aria-hidden="true"></span><b>REAL</b>
         <span class="sub">the actual engine · plain JavaScript</span>
       </header>
-      <div class="screen"><canvas id="cv-real" width="64" height="64" aria-label="Real game view"></canvas><div class="scan" aria-hidden="true"></div></div>
+      <div class="screen"><canvas id="cv-real" width="64" height="64" role="img" aria-label="Real game view: the first-person maze rendered by the game engine"></canvas><div class="scan" aria-hidden="true"></div></div>
       <footer class="panel-foot"><span id="pose">x 0.00 · y 0.00</span></footer>
     </section>
 
@@ -65,7 +84,7 @@
         <span class="dot live" aria-hidden="true"></span><b>DREAM</b>
         <span class="sub" id="dream-sub">a neural network · no game code</span>
       </header>
-      <div class="screen"><canvas id="cv-dream" width="64" height="64" aria-label="Dreamed game view"></canvas><div class="scan" aria-hidden="true"></div><div class="veil" id="veil"><span id="veil-text">waking up…</span></div></div>
+      <div class="screen"><canvas id="cv-dream" width="64" height="64" role="img" aria-label="Dreamed game view: the same maze as imagined by the neural network"></canvas><div class="scan" aria-hidden="true"></div><div class="veil" id="veil"><span id="veil-text" role="status">waking up…</span><span class="bar" aria-hidden="true"><i id="bar"></i></span></div></div>
       <footer class="panel-foot"><span id="dream-foot">frames since wake-up 0</span></footer>
     </section>
 
@@ -75,7 +94,7 @@
         <span class="key" data-k="L" title="Turn left">A</span><span class="key" data-k="B" title="Back">S</span><span class="key" data-k="R" title="Turn right">D</span>
       </div>
       <p class="keys-note">The same keypresses go to both panels. Arrow keys work too.</p>
-      <div class="mapbox"><canvas id="cv-map" class="minimap" width="96" height="96" aria-label="Top-down map with the real player position"></canvas><span class="lab">real position</span></div>
+      <div class="mapbox"><canvas id="cv-map" class="minimap" width="96" height="96" role="img" aria-label="Top-down map with the real player position"></canvas><span class="lab">real position</span></div>
     </div>
   </main>
 
@@ -106,7 +125,7 @@
     <button class="btn" id="btn-autowake" aria-pressed="false" title="Re-seed the dream from the real game every 2 seconds, so it keeps up (drift is still shown)">Auto wake-up</button>
     <button class="btn" id="btn-auto" aria-pressed="false" title="Replay a scripted walk through the maze (no keys needed)">Autoplay</button>
     <button class="btn" id="btn-scan" aria-pressed="false" title="CRT scanlines">Scanlines</button>
-    <button class="btn" id="btn-pause" aria-pressed="false" title="Pause (P)">Pause <kbd>P</kbd></button>
+    <button class="btn" id="btn-pause" aria-pressed="false" title="Pause or resume (P)"><span id="pause-lab">Pause</span> <kbd>P</kbd></button>
   </section>
 
 
@@ -122,9 +141,18 @@
 
   <section class="drift card" aria-label="Drift of the dream away from the real game">
     <div class="drift-head"><span class="lab">Drift</span><span class="muted">PSNR of the dream against the real frame, dB (higher = closer). Dashed lines: wake-ups.</span></div>
-    <canvas id="cv-drift" width="900" height="72"></canvas>
+    <canvas id="cv-drift" width="900" height="72" role="img" aria-label="Line chart of the dream's PSNR against the real frame over time, in dB"></canvas>
   </section>
 
+
+  <details class="card rec" id="recording">
+    <summary>Watch a recording of the demo <span class="muted">(0.5 MB)</span></summary>
+    <video id="rec-video" controls muted playsinline loop preload="none" poster="media/dream-poster.jpg" width="640" height="640" aria-label="Screen recording of the demo: the real engine and the network's dream side by side, driven by the same keypresses">
+      <source src="media/dream-640.mp4" type="video/mp4">
+      <a href="media/dream-640.mp4">Download the recording (MP4)</a>
+    </video>
+    <p class="muted rec-note">Recorded from this page with the live model (WebGPU, with auto wake-up on, as the caption in the video says).</p>
+  </details>
 
   <p class="capnote" id="capnote"></p>
 
@@ -134,7 +162,7 @@
 </div>
 
 <div class="scrim" id="scrim" hidden></div>
-<aside class="drawer" id="drawer" aria-hidden="true" aria-label="About this demo" tabindex="-1">
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="About this demo" tabindex="-1" inert>
   <button class="btn ghost close" id="btn-close" aria-label="Close">Close</button>
   <h2>About</h2>
 

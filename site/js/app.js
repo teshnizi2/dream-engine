@@ -1,6 +1,6 @@
 // Dream Engine: REAL (JS raycaster) next to DREAM (diffusion model in onnxruntime-web), same keypresses.
 import { World, stateFromSpecStart } from './game.mjs';
-import { Dream, Rng, rgbToChw, psnr, N, PIX, K, setContextLength, backgroundFraction } from './dream.mjs';
+import { Dream, loadOrt, Rng, rgbToChw, psnr, N, PIX, K, setContextLength, backgroundFraction } from './dream.mjs';
 
 const $ = (id) => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
@@ -69,8 +69,10 @@ function fitScale() {
     const keysCol = w >= 1060 ? 132 + 52 : 0;                 // keys sit between the panels on wide screens
     const avail = Math.min(w, 1180) - 32 - keysCol - (panels === 2 ? 26 : 0) - panels * 26;
     const byW = Math.floor(avail / panels / 64);
-    const byH = Math.max(5, Math.floor((h - 345) / 64));
+    const short = h <= 520;                                   // landscape phone: the panels must fit under a one-line header
+    const byH = Math.max(short ? 3 : 5, Math.floor((h - (short ? 130 : 345)) / 64));
     s = Math.max(4, Math.min(dreamOnly ? 9 : 8, byW, byH + (dreamOnly ? 1 : 0)));
+    if (short && matchMedia('(pointer: coarse)').matches) s = dreamOnly ? 4 : 3;      // leaves the side margins to the touch pad
   }
   document.documentElement.style.setProperty('--s', s);
 }
@@ -231,7 +233,8 @@ $('btn-dreamonly').addEventListener('click', (e) => {
   e.currentTarget.setAttribute('aria-pressed', String(on)); fitScale(); drawDrift();
 });
 $('btn-scan').addEventListener('click', (e) => { const on = body.classList.toggle('scanlines'); e.currentTarget.setAttribute('aria-pressed', String(on)); });
-$('btn-pause').addEventListener('click', (e) => { paused = !paused; e.currentTarget.setAttribute('aria-pressed', String(paused)); });
+function setPaused(on) { paused = on; $('btn-pause').setAttribute('aria-pressed', String(on)); $('pause-lab').textContent = on ? 'Resume' : 'Pause'; }
+$('btn-pause').addEventListener('click', () => setPaused(!paused));
 function setAutoplay(on) {
   autoplay = on; $('btn-auto').setAttribute('aria-pressed', String(on));
   if (on && ready) { resetReal(); wake(); tourIdx = 0; }
@@ -242,8 +245,11 @@ $('btn-autowake').addEventListener('click', (e) => { autowake = !autowake; e.cur
 if (autowake) $('btn-autowake').setAttribute('aria-pressed', 'true');
 document.querySelectorAll('.tp').forEach((b) => b.addEventListener('pointerdown', () => { if (autoplay) setAutoplay(false); }));
 const drawer = $('drawer'), scrim = $('scrim');
-function openDrawer() { drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); scrim.hidden = false; $('btn-about').setAttribute('aria-expanded', 'true'); drawer.focus({ preventScroll: true }); }
-function closeDrawer() { drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); scrim.hidden = true; $('btn-about').setAttribute('aria-expanded', 'false'); }
+function openDrawer() { drawer.inert = false; drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); scrim.hidden = false; $('btn-about').setAttribute('aria-expanded', 'true'); drawer.focus({ preventScroll: true }); }
+function closeDrawer() {
+  if (!drawer.classList.contains('open')) return;
+  drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); drawer.inert = true; scrim.hidden = true; $('btn-about').setAttribute('aria-expanded', 'false'); $('btn-about').focus({ preventScroll: true });
+}
 $('btn-about').addEventListener('click', () => (drawer.classList.contains('open') ? closeDrawer() : openDrawer()));
 $('btn-close').addEventListener('click', closeDrawer);
 scrim.addEventListener('click', closeDrawer);
@@ -253,26 +259,56 @@ if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => fitScale()).
 document.addEventListener('visibilitychange', () => { if (document.hidden) { held.clear(); setKeyLights(held); } });
 
 // ------------------------------------------------------------------ loading
+const MODEL_MB = { fp16: 13.8, fp32: 27.3 };           // sizes of the files in models/
+const bar = $('bar');
+const setBar = (f) => { if (bar) bar.style.width = `${Math.round(Math.max(0, Math.min(1, f)) * 100)}%`; };
+
 async function fetchWithProgress(url, onProgress) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
-  const total = +r.headers.get('content-length') || 0;
-  if (!r.body || !total) return new Uint8Array(await r.arrayBuffer());
-  const reader = r.body.getReader(); const buf = new Uint8Array(total); let got = 0;
-  for (;;) { const { done, value } = await reader.read(); if (done) break; buf.set(value, got); got += value.length; onProgress(got / total, total); }
-  return buf;
+  const total = r.headers.get('content-encoding') ? 0 : (+r.headers.get('content-length') || 0);   // a compressed transfer has no usable total
+  if (!r.body) return new Uint8Array(await r.arrayBuffer());
+  const reader = r.body.getReader(); const chunks = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onProgress(got, total); }
+  const out = new Uint8Array(got); let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
 }
 
-async function pickModel() {
-  const forced = qs.get('dtype');
-  let f16 = false;
-  try { const ad = navigator.gpu && await navigator.gpu.requestAdapter(); f16 = !!ad && ad.features.has('shader-f16'); } catch (e) { /* no WebGPU */ }
-  const order = forced ? [forced] : (f16 ? ['fp16', 'fp32'] : ['fp32']);
-  for (const d of order) {
-    const url = `models/dream_${d}.onnx`;
-    try { const head = await fetch(url, { method: 'HEAD' }); if (head.ok) return { url, dtype: d }; } catch (e) { /* try next */ }
-  }
-  throw new Error('no model file found in models/');
+const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
+
+// what this browser can do, before anything big is downloaded
+async function detectCaps() {
+  let adapter = null;
+  try { adapter = navigator.gpu ? await withTimeout(navigator.gpu.requestAdapter(), 4000) : null; } catch (e) { /* no WebGPU */ }
+  const conn = navigator.connection || {};
+  return {
+    gpu: !!adapter,
+    f16: !!adapter && adapter.features.has('shader-f16'),
+    wasm: typeof WebAssembly === 'object',
+    lowMem: navigator.deviceMemory !== undefined && navigator.deviceMemory <= 2,
+    slowNet: !!conn.saveData || /^(slow-2g|2g|3g)$/.test(conn.effectiveType || ''),
+  };
+}
+
+function pickModel(caps, mode) {
+  const d = qs.get('dtype') || (mode !== 'wasm' && caps.gpu && caps.f16 ? 'fp16' : 'fp32');
+  return { url: `models/dream_${d}.onnx`, dtype: d };
+}
+
+// no live model: the recording plays instead, with one line saying why and a button to try anyway
+function showGate(why, runLabel, run) {
+  stopStatic();
+  body.classList.remove('loading'); body.classList.add('gated');
+  $('gate-why').textContent = why;
+  const btn = $('gate-run');
+  btn.hidden = !run;
+  if (run) { btn.textContent = runLabel; btn.onclick = () => { body.classList.remove('gated'); body.classList.add('loading'); $('gate').hidden = true; startStatic(); run(); }; }
+  $('gate').hidden = false;
+  const rec = $('recording'), v = $('rec-video');
+  rec.open = true;
+  v.preload = 'auto';
+  if (!reduced) v.play().catch(() => { /* needs a tap: the controls are there */ });
 }
 
 async function boot() {
@@ -280,34 +316,62 @@ async function boot() {
   body.classList.toggle('square', CAPTURE && qs.get('square') === '1');
   fitScale();
   startStatic();
+  if (reduced && !CAPTURE) setPaused(true);
+  let caps;
+  try { caps = await detectCaps(); } catch (e) { caps = { gpu: false, f16: false, wasm: typeof WebAssembly === 'object', lowMem: false, slowNet: false }; }
+  const force = CAPTURE || ['run', 'backend', 'dtype'].some((k) => qs.has(k));
+  if (!force) {
+    const cpuMb = MODEL_MB.fp32.toFixed(0), gpuMb = MODEL_MB[caps.f16 ? 'fp16' : 'fp32'].toFixed(0);
+    if (!caps.gpu && !caps.wasm) return showGate('This browser has neither WebGPU nor WebAssembly, so the network cannot run here. Here is a recording of it instead.');
+    if (!caps.gpu) return showGate(`No WebGPU in this browser (common in in-app browsers and older phones), so the network would run on the CPU: a ${cpuMb} MB download and only a few frames per second. Here is a recording of it instead.`, `Run the live model anyway (${cpuMb} MB)`, () => start(caps, 'wasm'));
+    if (caps.lowMem) return showGate(`This device reports little memory, so the live model (${gpuMb} MB plus its GPU buffers) is not started automatically. Here is a recording of it instead.`, `Run the live model anyway (${gpuMb} MB)`, () => start(caps, 'auto'));
+    if (caps.slowNet) return showGate(`Data saver or a slow connection is on, so the ${gpuMb} MB model is not downloaded automatically. Here is a recording of it instead.`, `Download and run it (${gpuMb} MB)`, () => start(caps, 'auto'));
+  }
+  start(caps, caps.gpu ? 'auto' : 'wasm');
+}
+
+async function start(caps, mode) {
   const veilText = $('veil-text');
+  setBar(0);
   try {
-    spec = await (await fetch('js/spec.json')).json();
-    try { meta = await (await fetch('models/dream_meta.json')).json(); } catch (e) { meta = {}; }
-    setContextLength(meta.config?.num_ctx ?? 4);                  // the model's context length (v2: 4); everything below reads K
-    const WORDS = { 4: 'four', 8: 'eight' };
-    document.querySelectorAll('[data-ctx]').forEach((el) => { el.textContent = el.dataset.ctx === 'word' ? (WORDS[K] || String(K)) : String(K); });
-    try { tour = (await (await fetch('js/tour.json')).json()).actions; } catch (e) { tour = []; }
-    try {
-      const ev = await (await fetch('models/eval_summary.json')).json();
-      const span = document.querySelector('[data-eval="drift"]');
-      if (span && ev.psnr_at) {
-        const g = (k) => (ev.psnr_at[k] !== undefined ? ev.psnr_at[k].toFixed(1) : null);
-        let t = `Measured on the game's own exploration trajectories (${ev.episodes} episodes): the dream matches the real frame at ${g('1')} dB after 1 frame, ${g('16')} dB after 16, ${g('32')} dB after 32 and ${g('128')} dB after 128; an unrelated frame scores about ${ev.floor.toFixed(0)} dB.`;
-        if (ev.validity) t += ` Even where it no longer matches, its frames stay game-like: ${ev.validity.dream_mean.toFixed(1)} dB to the nearest real frame, against ${ev.validity.real_mean.toFixed(1)} dB for real frames.`;
-        span.textContent = t + ' ';
-      }
-    } catch (e) { /* optional */ }
-    world = new World(spec);
-    resetReal();
-    $('r-params').textContent = meta.params ? fmtParams(meta.params) : '–';
-    const choice = await pickModel();
+    const choice = pickModel(caps, mode);
     veilText.textContent = 'loading model…';
-    const bytes = await fetchWithProgress(choice.url, (f, total) => { veilText.textContent = `loading model ${(f * 100).toFixed(0)}% of ${(total / 1e6).toFixed(0)} MB`; });
-    veilText.textContent = 'compiling…';
-    dream = await Dream.create({ modelBytes: bytes, meta, backend: qs.get('backend') || 'auto', capture: qs.get('capture_graph') !== '0', seed: +(qs.get('seed') || 1234), onStatus: (s) => { veilText.textContent = s; } });
+    // everything that is needed goes in parallel: the model, the runtime and the small files
+    const ortP = loadOrt(mode === 'wasm' || !caps.gpu ? 'wasm' : 'webgpu'); ortP.catch(() => {});
+    const modelP = fetchWithProgress(choice.url, (got, total) => {
+      const mb = (got / 1e6).toFixed(1), tot = total ? total / 1e6 : MODEL_MB[choice.dtype];
+      setBar(got / (tot * 1e6)); veilText.textContent = `loading model ${mb} of ${tot.toFixed(1)} MB`;
+    });
+    modelP.catch(() => {});
+    if (!spec) {
+      spec = await (await fetch('js/spec.json')).json();
+      try { meta = await (await fetch('models/dream_meta.json')).json(); } catch (e) { meta = {}; }
+      setContextLength(meta.config?.num_ctx ?? 4);                  // the model's context length (v2: 4); everything below reads K
+      const WORDS = { 4: 'four', 8: 'eight' };
+      document.querySelectorAll('[data-ctx]').forEach((el) => { el.textContent = el.dataset.ctx === 'word' ? (WORDS[K] || String(K)) : String(K); });
+      try { tour = (await (await fetch('js/tour.json')).json()).actions; } catch (e) { tour = []; }
+      try {
+        const ev = await (await fetch('models/eval_summary.json')).json();
+        const span = document.querySelector('[data-eval="drift"]');
+        if (span && ev.psnr_at) {
+          const g = (k) => (ev.psnr_at[k] !== undefined ? ev.psnr_at[k].toFixed(1) : null);
+          let t = `Measured on the game's own exploration trajectories (${ev.episodes} episodes): the dream matches the real frame at ${g('1')} dB after 1 frame, ${g('16')} dB after 16, ${g('32')} dB after 32 and ${g('128')} dB after 128; an unrelated frame scores about ${ev.floor.toFixed(0)} dB.`;
+          if (ev.validity) t += ` Even where it no longer matches, its frames stay game-like: ${ev.validity.dream_mean.toFixed(1)} dB to the nearest real frame, against ${ev.validity.real_mean.toFixed(1)} dB for real frames.`;
+          span.textContent = t + ' ';
+        }
+      } catch (e) { /* optional */ }
+      world = new World(spec);
+      resetReal();
+      $('r-params').textContent = meta.params ? fmtParams(meta.params) : '–';
+    }
+    const bytes = await modelP;
+    setBar(1);
+    veilText.textContent = 'compiling the network (slow on phones)…';
+    await ortP;
+    dream = await Dream.create({ modelBytes: bytes, meta, backend: qs.get('backend') || mode, capture: qs.get('capture_graph') !== '0', seed: +(qs.get('seed') || 1234), wasmFallback: choice.dtype !== 'fp16', onStatus: (s) => { veilText.textContent = s; } });
     dream.info.dtype = choice.dtype;
-    const steps0 = +(qs.get('steps') || meta.default_steps || 3);
+    const wasm = dream.info.backend === 'wasm';
+    const steps0 = +(qs.get('steps') || (wasm ? 1 : meta.default_steps || 3));      // on the CPU one denoising step per frame keeps it playable
     setSteps(Math.min(3, Math.max(1, steps0)));
     $('r-backend').innerHTML = `${dream.info.backend === 'webgpu' ? 'WebGPU' : 'WASM'}<small>${choice.dtype}${dream.info.graphCapture ? ' · captured' : ''}</small>`;
     $('dream-sub').textContent = `neural net · ${meta.params ? fmtParams(meta.params) + ' params · ' : ''}no game code`;
@@ -316,13 +380,22 @@ async function boot() {
     body.classList.remove('loading');
     fitScale();
     wake();
-    if (dream.info.backend === 'wasm') toast('WebGPU is not available here, so the dream runs on the slow WASM path. Expect a few frames per second.');
+    if (wasm) {
+      toast('No WebGPU here, so the dream runs on the CPU (WASM, 1 step per frame). Expect a few frames per second; the recording below shows the full speed.');
+      setTimeout(() => {                                             // measured, not assumed: a very slow device is pointed at the recording
+        const fps = tickTimes.length;
+        if (!paused && fps && fps < 3) { $('recording').open = true; toast(`This device manages about ${fps} fps on the CPU. The recording below shows the demo at full speed.`, 12000); }
+      }, 8000);
+    }
     if (CAPTURE) installCapture(); else run();
   } catch (err) {
     console.error(err);
-    stopStatic(); body.classList.remove('loading');
-    veilText.textContent = 'could not wake the model';
-    toast(`Could not load the model: ${err.message || err}`, 20000);
+    dream = null;
+    const gpuFail = err && err.code === 'webgpu-failed';
+    showGate(gpuFail
+      ? 'WebGPU failed to start on this device, so the live model cannot run on the GPU. Here is a recording of it instead.'
+      : `The live model could not start here (${String(err && err.message || err).slice(0, 140)}). Here is a recording of it instead.`,
+    mode === 'wasm' ? null : `Try the CPU instead (${MODEL_MB.fp32.toFixed(0)} MB)`, mode === 'wasm' ? null : () => start(caps, 'wasm'));
   }
 }
 

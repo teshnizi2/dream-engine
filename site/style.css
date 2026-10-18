@@ -34,7 +34,7 @@ body {
 .app {
   position: relative; z-index: 1;
   width: min(1180px, 100%); margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   display: flex; flex-direction: column; gap: 18px;
 }
 a { color: var(--amber); text-underline-offset: 3px; }
@@ -55,7 +55,7 @@ h1 em { font-style: normal; font-weight: 300; color: var(--amber); }
 /* ---------------------------------------------------------------- buttons */
 .btn {
   appearance: none; cursor: pointer; font: 500 13.5px/1 var(--font); letter-spacing: .01em; color: var(--text);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; min-height: 44px;
   display: inline-flex; align-items: center; gap: 8px; transition: border-color .15s, background .15s, transform .05s;
   -webkit-tap-highlight-color: transparent;
 }
@@ -126,6 +126,9 @@ body.scanlines .scan { opacity: 1; }
   font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--amber);
 }
 body:not(.loading) .veil { opacity: 0; }
+.bar { position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--amber); transition: width .2s; }
+.veil #veil-text { line-height: 1.5; max-width: 100%; }
 
 body.dreamonly #panel-real { display: none; }
 body.dreamonly .stage { grid-template-columns: auto auto; }
@@ -157,25 +160,27 @@ body.dreamonly .stage { grid-template-columns: auto auto; }
 .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
 .seg-lab { font: 500 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 0 12px; display: grid; place-items: center; border-right: 1px solid var(--line); }
-.seg-b { appearance: none; border: 0; background: transparent; color: var(--muted); font: 500 14px/1 var(--mono); padding: 11px 15px; cursor: pointer; position: relative; }
+.seg-b { appearance: none; border: 0; background: transparent; color: var(--muted); font: 500 14px/1 var(--mono); padding: 11px 15px; min-width: 44px; min-height: 44px; cursor: pointer; position: relative; }
 .seg-b:hover { color: var(--text); }
 .seg-b[aria-pressed="true"] { color: var(--text); background: rgba(var(--amber-rgb), .13); }
 .seg-b[aria-pressed="true"]::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 0; height: 2px; background: var(--amber); }
-.credits { color: #6c778e; font: 400 11px/1.55 var(--mono); max-width: 110ch; padding-bottom: 6px; }
+.credits { color: #8190a8; font: 400 11px/1.55 var(--mono); max-width: 110ch; padding-bottom: 6px; }
 
 /* ---------------------------------------------------------------- touch pad (phones, tablets) */
 .touchpad { display: none; }
 @media (pointer: coarse), (max-width: 760px) {
   .touchpad {
     display: flex; justify-content: space-between; align-items: flex-end; padding: 2px 0 0; gap: 8px;
+    position: sticky; bottom: max(8px, env(safe-area-inset-bottom)); z-index: 5; pointer-events: none;   /* stays in reach while the page scrolls; gaps between the buttons do not block scrolling */
   }
+  .tp { pointer-events: auto; }
   .tp-left, .tp-right { display: flex; gap: min(10px, 2.6vw); }
   .tp-mid { display: flex; flex-direction: column; gap: 6px; }
   .tp {
     width: min(68px, 17vw); height: min(68px, 17vw); border-radius: 18px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
     font: 600 20px/1 var(--mono); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   }
-  .tp.sm { width: min(44px, 11vw); height: min(44px, 11vw); border-radius: 12px; font-size: 14px; color: var(--muted); }
+  .tp.sm { width: 44px; height: 44px; border-radius: 12px; font-size: 14px; color: var(--muted); }
   .tp.on { background: var(--amber); color: #1a1204; border-color: #ffb02e; }
   .keys { display: none; }
 }
@@ -188,7 +193,7 @@ body.dreamonly .stage { grid-template-columns: auto auto; }
   transition: transform .32s cubic-bezier(.2,.8,.2,1); box-shadow: -30px 0 80px rgba(0,0,0,.45);
 }
 .drawer.open { transform: none; }
-.drawer .close { position: absolute; top: 16px; right: 16px; padding: 8px 12px; font-size: 12.5px; }
+.drawer .close { position: absolute; top: 12px; right: 12px; padding: 8px 14px; font-size: 13px; }
 .drawer h2 { margin: 0 0 6px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
 .drawer h3 { margin: 26px 0 6px; font: 600 11.5px/1.2 var(--mono); letter-spacing: .15em; text-transform: uppercase; color: var(--amber); }
 .drawer p, .drawer li { color: #c6cde0; font-size: 14.5px; line-height: 1.6; text-wrap: pretty; }
@@ -255,6 +260,31 @@ body.capture.square h1 { font-size: 56px; }
 body.capture.square .drift canvas { height: 96px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot.live { animation: none; } .panel.dream.woke { animation: none; }
+  .dot.live { animation: none; } .panel.dream.woke { animation: none; } .bar i { transition: none; }
   .drawer, .panel, .btn, .key, .scan, .veil { transition: none; }
+}
+
+/* ---------------------------------------------------------------- no live model: recording instead */
+.gate { border-color: rgba(var(--amber-rgb), .5); display: flex; flex-direction: column; gap: 12px; }
+.gate[hidden] { display: none; }
+.gate-why { margin: 0; font-size: 15px; line-height: 1.5; }
+.gate-actions .btn[hidden] { display: none; }
+.rec summary { cursor: pointer; min-height: 44px; padding: 9px 0; font-weight: 500; }
+.rec video { display: block; width: min(100%, 640px); height: auto; aspect-ratio: 1; margin: 8px auto 0; border-radius: 8px; background: #05070b; }
+.rec-note { margin: 8px 0 2px; font-size: 12.5px; }
+body.gated .top { order: -4; } body.gated #gate { order: -3; } body.gated #recording { order: -2; }
+body.gated .stage, body.gated .touchpad, body.gated .controls, body.gated .deck, body.gated .drift, body.gated .capnote { display: none; }
+
+/* ---------------------------------------------------------------- landscape phones */
+@media (max-height: 520px) and (orientation: landscape) {
+  .tag { display: none; }
+  h1 { font-size: 26px; }
+  .app { gap: 10px; padding-top: max(10px, env(safe-area-inset-top)); }
+  .panel-head { margin-bottom: 6px; }
+}
+@media (max-height: 520px) and (orientation: landscape) and (pointer: coarse) {
+  /* the pad sits in the side margins so it never covers the panels */
+  .app { padding-left: max(150px, env(safe-area-inset-left)); padding-right: max(215px, env(safe-area-inset-right)); padding-bottom: 96px; }
+  .touchpad { position: fixed; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); }
+  .tp-mid { margin-left: auto; }
 }
