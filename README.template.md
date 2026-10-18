@@ -1,6 +1,6 @@
 # Dream Engine
 
-**Live demo: <https://dream.teshnizi.dev>** (Chrome or Edge 113+ for WebGPU; other browsers fall back to WASM, which is slower; the fp16 model is about 13 MB) · MIT licence
+**Live demo: <https://dream.teshnizi.dev>** (Chrome or Edge 113+ for WebGPU, fp16 model about 13 MB; browsers without WebGPU, such as many in-app browsers, show a 0.5 MB recording first and run the model on WASM, which is slower, only on request) · MIT licence
 
 **A game that only exists in a neural network's dream.** A small diffusion world model, trained on a first-person
 raycaster maze, runs in your browser tab and *is* the game: on the left the real engine, on the right the network
@@ -9,7 +9,7 @@ imagining every frame from the same keypresses, with no game code.
 ![hero](media/hero.png)
 
 * Video (1080x1350, 22 s; 1080x1080 cut too): `media/dream-1080x1350.mp4`, `media/dream-1080x1080.mp4` · Hero still: `media/hero.png` · Drift figure: `media/drift.png` · Rollout grid and gif: `media/rollout_grid.png`, `media/rollout.gif` · Denoising steps: `media/sampler_steps.png`
-* Run it: `cd site && python3 -m http.server 8000`, open <http://localhost:8000> in Chrome or Edge (WebGPU; falls back to WASM).
+* Run it: `cd site && python3 -m http.server 8000`, open <http://localhost:8000> in Chrome or Edge (WebGPU; without it the page offers the recording and an opt-in WASM run). Phone-friendliness notes: `docs/mobile.md`.
 * Nothing here is deployed or posted. Everything below was measured; each number names the file it came from.
 
 ## At a glance
