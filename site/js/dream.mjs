@@ -6,14 +6,26 @@
 // The ONNX graph (export.py) has static shapes (batch 1): x [1,3,64,64], sigma [1], ctx [1,3K,64,64],
 // act [1,K,9] (one-hot), ctx_sigma [1] -> denoised [1,3,64,64].
 
-import * as ort from 'onnxruntime-web';
 import { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, eulerSample, quantiseFrame } from './util.mjs';
 export { SIZE, PIX, N, K, setContextLength, buildSigmas, Rng, rgbToChw, psnr, eulerSample, quantiseFrame, backgroundFraction } from './util.mjs';
 
 const POOL = 1 << 20;
 
+// onnxruntime-web is loaded on demand: the WebGPU build (which carries a 28 MB wasm for its CPU path) only when the page
+// will use WebGPU, the plain WASM build (about half the size) otherwise. The import map in index.html names both.
+let ort = null;
+const ortLoads = {};
+export function loadOrt(kind) {
+  const names = kind === 'wasm' ? ['onnxruntime-web/wasm', 'onnxruntime-web'] : ['onnxruntime-web'];
+  return (ortLoads[kind] ||= (async () => {
+    let err;
+    for (const n of names) { try { return await import(n); } catch (e) { err = e; } }
+    throw err;
+  })());
+}
+
 export class Dream {
-  static async create({ modelBytes, meta = {}, backend = 'auto', capture = true, seed = 1234, onStatus = () => {} }) {
+  static async create({ modelBytes, meta = {}, backend = 'auto', capture = true, seed = 1234, onStatus = () => {}, wasmFallback = true }) {
     const d = new Dream();
     setContextLength(meta.config?.num_ctx ?? 4);          // the graph's context length (v2: 4); must be set before the buffers below
     d.rng = new Rng(seed);
@@ -32,19 +44,21 @@ export class Dream {
     d.ctxSigma = meta.ctx_sigma ?? 0.1;
     d.initScale = meta.sampler_init === 'unit' ? 'unit' : 'edm';
     d.lastMs = 0;
-    await d._open(modelBytes, backend, capture, onStatus);
+    await d._open(modelBytes, backend, capture, onStatus, wasmFallback);
     return d;
   }
 
-  async _open(modelBytes, backend, capture, onStatus) {
-    const th = new URLSearchParams(location.search).get('threads');
-    ort.env.wasm.numThreads = th ? +th : ((typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) ? Math.min(4, navigator.hardwareConcurrency || 2) : 1);
-    ort.env.wasm.proxy = backend === 'wasm';      // keep the UI thread free when inference runs on the CPU
+  async _open(modelBytes, backend, capture, onStatus, wasmFallback = true) {
     const t0 = performance.now();
     let adapter = null;
     if (backend !== 'wasm' && navigator.gpu) {
       try { adapter = await navigator.gpu.requestAdapter(); } catch (e) { adapter = null; }
     }
+    ort = await loadOrt(adapter ? 'webgpu' : 'wasm');
+    // WASM threads need cross-origin isolation (SharedArrayBuffer); without it onnxruntime-web runs single-threaded
+    const th = new URLSearchParams(location.search).get('threads');
+    ort.env.wasm.numThreads = th ? +th : ((typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) ? Math.min(4, navigator.hardwareConcurrency || 2) : 1);
+    ort.env.wasm.proxy = !adapter;                // CPU inference runs in a worker so a slow device keeps a responsive page
     this.info = { backend: 'wasm', graphCapture: false, adapter: null, modelBytes: modelBytes.byteLength };
     const tryWebgpu = async (cap) => {
       onStatus(cap ? 'compiling WebGPU graph (captured)' : 'compiling WebGPU graph');
@@ -62,7 +76,11 @@ export class Dream {
       catch (e1) {
         console.warn('WebGPU with graph capture failed, retrying without capture', e1);
         try { this.session = null; this.gpu = null; await tryWebgpu(false); }
-        catch (e2) { console.warn('WebGPU failed, falling back to wasm', e2); this.session = null; this.gpu = null; this.info.backend = 'wasm'; }
+        catch (e2) {
+          console.warn('WebGPU failed, falling back to wasm', e2); this.session = null; this.gpu = null; this.info.backend = 'wasm';
+          if (!wasmFallback) { const e = new Error('WebGPU failed to start on this device'); e.code = 'webgpu-failed'; throw e; }
+          ort = await loadOrt('wasm'); ort.env.wasm.numThreads = 1; ort.env.wasm.proxy = true;
+        }
       }
     }
     if (!this.session) {
