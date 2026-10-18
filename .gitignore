@@ -18,3 +18,5 @@ runs/
 tools/bench_models/
 site/models/*.onnx
 results/rollouts_*.npz
+
+.vercel/
