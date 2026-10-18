@@ -1,5 +1,7 @@
 # Dream Engine
 
+**Live demo: <https://dream.teshnizi.dev>** (Chrome or Edge 113+ for WebGPU; other browsers fall back to WASM, which is slower; the fp16 model is about 13 MB) · MIT licence
+
 **A game that only exists in a neural network's dream.** A small diffusion world model, trained on a first-person
 raycaster maze, runs in your browser tab and *is* the game: on the left the real engine, on the right the network
 imagining every frame from the same keypresses, with no game code.

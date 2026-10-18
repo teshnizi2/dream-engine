@@ -2,6 +2,12 @@
 
 Attach `media/dream-1080x1350.mp4` (or the 1080x1080 cut). Second image: `media/drift.png`.
 
+## Links (deployed 2026-10-18)
+
+- Demo: https://dream.teshnizi.dev (Chrome or Edge for WebGPU; the fp16 model is about 13 MB; other browsers fall back to WASM, which is slower)
+- Code and weights: https://github.com/teshnizi2/dream-engine (MIT)
+- The URL is not part of the 113 words. LinkedIn builds the link card from the page's share image (`site/og.jpg`).
+
 ## Draft (113 words)
 
 I trained a 6.8M-parameter network to be a game.

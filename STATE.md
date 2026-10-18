@@ -113,9 +113,17 @@ Shared rules: `../visual-series-RULES.md` (ALICE was approved for this project's
   `~/dream-engine` holds code, env, runs, logs, results. `alice/README.md` has commands + measured cost table.
 - Disk: ~10 GB free locally; `runs/`, `results/rollouts_*.npz` and `tools/bench_models/` are gitignored scratch.
 
+## Deployed and published (2026-10-18, approved by Reza)
+- Live: https://dream.teshnizi.dev (also https://dream-engine.vercel.app). Vercel project `dream-engine` (team hmkhd2-1413s-projects, `prj_7gKwOzbIZvRyeYbMy0x66q4w5VQs`), static deploy of `site/`, no build step; the model files `site/models/dream_{fp16,fp32}.onnx` are committed with `git add -f` and served from there.
+- Code and weights: https://github.com/teshnizi2/dream-engine (public, MIT licence, chosen by Reza; DIAMOND's MIT notice stays in `THIRD_PARTY.md`).
+- Redeploy after changing `site/`: `cd site && vercel deploy --prod --yes --scope hmkhd2-1413s-projects` (`site/.vercel/` is gitignored), then `git push`.
+- Checked live: all 16 served files are byte-identical to `site/` (SHA-256, including both ONNX files); in the in-app browser the page reported `[dream] ready webgpu 8017 ms`, backend WebGPU fp16 (captured), 2 steps per frame, drift PSNR 33.8 dB, and the 375 px layout has no horizontal scroll. The in-app pane was hidden and shared the GPU, so its 19 fps is not a speed measurement (the README numbers stand). The only console message besides the warm-up log is a harmless warning that a preloaded onnxruntime wasm file was not used within a few seconds.
+- Share card: `site/og.jpg` (1200x630, a crop of `media/hero.png`) plus Open Graph, Twitter and canonical tags in `site/index.html`.
+- Hosting limits: Vercel Hobby includes 100 GB/month of Fast Data Transfer for the whole team (it also serves www.studypuff.com); sustained overage can lead to paused deployments (Vercel warns first; fix = upgrade to Pro or cut traffic). The fp16 model is the only large file served by Vercel (13.1 MB); the 28 MB onnxruntime wasm comes from jsDelivr, so roughly 7,000 first visits use the allowance. If a post takes off, move the heavy files to a host with free egress or upgrade the team to Pro.
+
 ## Open for Reza
-- **Licence** of this repo's own code is not chosen (README says so; DIAMOND's MIT notice is in `THIRD_PARTY.md`).
-- **Nothing is deployed or posted.** To publish, `site/` is a static folder; the model files `site/models/dream_{fp16,fp32}.onnx` are committed with `git add -f`.
+- **Licence**: MIT, chosen by Reza on 2026-10-18 (`LICENSE`, `package.json`, README); DIAMOND's MIT notice is in `THIRD_PARTY.md`.
+- **Deployed 2026-10-18, nothing posted.** See the section above.
 - The page loads onnxruntime-web (28 MB wasm) from jsDelivr and fonts from Google Fonts; self-hosting them is a privacy/offline choice. First load downloads ~42 MB.
 - Auto wake-up default is OFF (pure imagination, honest but it collapses onto flat walls after a while); the video re-seeds every 1.25 s and says so.
   A "collapse guard" that wakes the dream when a frame goes flat would look better but would hide the failure mode: your call.
